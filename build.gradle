@@ -2,7 +2,6 @@
  * build.gradle
  *
  * Copyright by toolarium-common, all rights reserved.
- * MIT License: https://mit-license.org
  */
 apply from: "https://raw.githubusercontent.com/toolarium/common-gradle-build/master/gradle/common.gradle"
 
