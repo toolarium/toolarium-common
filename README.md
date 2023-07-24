@@ -31,7 +31,6 @@ dependencies {
 <dependency>
     <groupId>com.github.toolarium</groupId>
     <artifactId>toolarium-common</artifactId>
-    <artifactId>toolarium-common</artifactId>
     <version>0.1.0</version>
 </dependency>
 ```
