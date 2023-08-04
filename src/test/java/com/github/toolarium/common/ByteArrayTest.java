@@ -29,12 +29,24 @@ public class ByteArrayTest {
      * Test equal
      */
     @Test
+    @SuppressWarnings("resource")
     public void testEqual() {
         assertEquals(new ByteArray(""), new ByteArray());
         assertEquals(new ByteArray(), new ByteArray());
         assertEquals(new ByteArray(""), new ByteArray(""));
+        assertEquals(new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXY"), new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXY"));
+        assertEquals(new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXYZ").toByteArray(0, 26));
+        
+    }
 
-        assertEquals(new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), new ByteArray("ABCDEFGHIJKLMNOPQRSTUVWXYZ"));
+    
+    /**
+     * Test equal
+     */
+    @Test
+    @SuppressWarnings("resource")
+    public void testToHex() {
+        assertEquals("414243", new ByteArray("ABC").toHex());
     }
 
 

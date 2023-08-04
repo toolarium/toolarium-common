@@ -699,9 +699,8 @@ public class ByteArray
      */
     public String toHex() {
         StringBuffer hexNumber = new StringBuffer(bytes.length * 2);
-        String value;
         for (int i = 0; i < bytes.length; i++) {
-            value = Long.toString(bytes[i] & 0xff, 16);
+            String value = Long.toString(bytes[i] & 0xff, 16);
             if (value.length() == 1) {
                 value = "0" + value;
             }

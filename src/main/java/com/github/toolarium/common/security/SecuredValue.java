@@ -23,6 +23,16 @@ public class SecuredValue<T> implements ISecuredValue<T> {
      * Constructor for SecuredValue
      *
      * @param value the value
+     */
+    public SecuredValue(T value) {
+        setValue(value, "...");
+    }
+
+    
+    /**
+     * Constructor for SecuredValue
+     *
+     * @param value the value
      * @param securedValue the secured value
      */
     public SecuredValue(T value, String securedValue) {
