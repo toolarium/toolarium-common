@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /**
  * The semantic version, see https://semver.org.
- * 
+ * TODO: cargo support https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html, https://guides.cocoapods.org/using/the-podfile.html
  * @author patrick
  */
 public class SemanticVersion extends AbstractVersion implements Comparable<SemanticVersion>, Serializable {

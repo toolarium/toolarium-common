@@ -127,7 +127,6 @@ public class VersionTest {
         assertNull(new Version(QUARKUS_VERSION_3_2_2_FINAL).getMinorSuffix());
         assertEquals(2, new Version(QUARKUS_VERSION_3_2_2_FINAL).getPatchNumber());
         assertEquals("Final", new Version(QUARKUS_VERSION_3_2_2_FINAL).getPatchSuffix());
-        
     }
 
     
