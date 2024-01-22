@@ -117,7 +117,7 @@ public final class CompareMaps {
             if (right != null && right.containsKey(leftKey)) {
                 V rightValue = onlyOnRight.remove(leftKey);
 
-                if (leftValue.equals(rightValue)) {
+                if ((leftValue == null && rightValue == null) || (leftValue != null && leftValue.equals(rightValue))) {
                     onBoth.put(leftKey, leftValue);
                 } else {
                     differences.put(leftKey, new ValueDifference<V>(leftValue, rightValue));
