@@ -30,36 +30,24 @@ _    * Constructor for SortedMapDifferenceImpl
     }
 
     
-    /**
-     * @see com.github.toolarium.common.compare.map.CompareMaps.fp.data.comparator.Maps.MapDifferenceImpl#entriesDiffering()
-     */
     @Override
     public SortedMap<K, IValueDifference<V>> entriesDiffering() {
         return (SortedMap<K, IValueDifference<V>>) super.entriesDiffering();
     }
 
     
-    /**
-     * @see com.github.toolarium.common.compare.map.CompareMaps.fp.data.comparator.Maps.MapDifferenceImpl#entriesInCommon()
-     */
     @Override
     public SortedMap<K, V> entriesInCommon() {
         return (SortedMap<K, V>) super.entriesInCommon();
     }
 
     
-    /**
-     * @see com.github.toolarium.common.compare.map.CompareMaps.fp.data.comparator.Maps.MapDifferenceImpl#entriesOnlyOnLeft()
-     */
     @Override
     public SortedMap<K, V> entriesOnlyOnLeft() {
         return (SortedMap<K, V>) super.entriesOnlyOnLeft();
     }
 
     
-    /**
-     * @see com.github.toolarium.common.compare.map.CompareMaps.fp.data.comparator.Maps.MapDifferenceImpl#entriesOnlyOnRight()
-     */
     @Override
     public SortedMap<K, V> entriesOnlyOnRight() {
         return (SortedMap<K, V>) super.entriesOnlyOnRight();

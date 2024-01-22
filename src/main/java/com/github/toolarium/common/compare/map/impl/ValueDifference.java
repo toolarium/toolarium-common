@@ -30,18 +30,12 @@ public class ValueDifference<V> implements IValueDifference<V> {
     }
 
 
-    /**
-     * @see com.axonfintech.fp.data.comparator.IMapDifference.ValueDifference#leftValue()
-     */
     @Override
     public V leftValue() {
         return left;
     }
 
     
-    /**
-     * @see com.axonfintech.fp.data.comparator.IMapDifference.ValueDifference#rightValue()
-     */
     @Override
     public V rightValue() {
         return right;
