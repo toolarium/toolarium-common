@@ -62,27 +62,10 @@ public class TimeDifferenceFormatter extends AbstractDifferenceFormatter {
             dayText = "d";
         }
     }
-    
+
+
     /**
-     * Format a duration 
-     * 
-     * @param duration the duration
-     * @return the formated string
-    public String formatAsString( Duration duration )
-    {
-        if( duration==null || duration.getEnd()==null )
-            return formatAsString( 0 );
-
-        if( duration==null || duration.getStart()==null )
-            return formatAsString( 0 );
-
-        return formatAsString( duration.getEnd().getTime() - duration.getStart().getTime() );
-    }
-     */
-
-    
-    /**
-     * @see jptools.util.formatter.AbstractDifferenceFormatter#formatAsString(long)
+     * @see com.github.toolarium.common.formatter.AbstractDifferenceFormatter#formatAsString(long)
      */
     @Override
     public String formatAsString(long time) {

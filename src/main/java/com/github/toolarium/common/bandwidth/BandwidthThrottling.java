@@ -71,9 +71,9 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
         this.sleepStatisticCounter = new StatisticCounter();
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#reset()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#reset()
      */
     @Override
     public synchronized void reset() {
@@ -86,7 +86,7 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
 
 
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#bandwidthCheck()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#bandwidthCheck()
      */
     @Override
     public synchronized void bandwidthCheck() {
@@ -135,81 +135,81 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
         return 0;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getBandwidth()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getBandwidth()
      */
     @Override
     public synchronized long getBandwidth() {
         return bandwidth;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#setBandwidth(long)
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#setBandwidth(long)
      */
     @Override
     public synchronized void setBandwidth(long bandwidth) {
         this.bandwidth = bandwidth;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getUpdateInterval()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getUpdateInterval()
      */
     @Override
     public synchronized int getUpdateInterval() {
         return updateInterval;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#setUpdateInterval(int)
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#setUpdateInterval(int)
      */
     @Override
     public synchronized void setUpdateInterval(int updateInterval) {
         this.updateInterval = updateInterval;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getCounter()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getCounter()
      */
     @Override
     public synchronized long getCounter() {
         return count;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getStartTime()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getStartTime()
      */
     @Override
     public synchronized Long getStartTime() {
         return startTime;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getLastUpdateTime()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getLastUpdateTime()
      */
     @Override
     public synchronized Long getLastUpdateTime() {
         return lastUpdateTime;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getBandwidthStatisticCounter()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getBandwidthStatisticCounter()
      */
     @Override
     public synchronized StatisticCounter getBandwidthStatisticCounter() {
         return bandwidthStatisticCounter;
     }
 
-    
+
     /**
-     * @see jptools.io.bulkservice.IBandwidthThrottling#getSleepStatisticCounter()
+     * @see com.github.toolarium.common.bandwidth.IBandwidthThrottling#getSleepStatisticCounter()
      */
     @Override
     public synchronized StatisticCounter getSleepStatisticCounter() {

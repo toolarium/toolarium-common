@@ -92,9 +92,9 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
         }
     }    
 
-    
+
     /**
-     * @see jptools.util.statistic.IStatisticCounter#add(java.lang.Object)
+     * @see com.github.toolarium.common.statistic.IStatisticCounter#add(java.lang.Object)
      */
     @Override
     public synchronized void add(StatisticCounter statisticCounter) {
