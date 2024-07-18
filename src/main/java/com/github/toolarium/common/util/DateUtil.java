@@ -5,6 +5,7 @@
  */
 package com.github.toolarium.common.util;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -299,7 +300,7 @@ public final class DateUtil {
     public String toDateString(Date date) {
         return toDateString(date, "@");
     }
-    
+
     
     /**
      * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
@@ -313,6 +314,33 @@ public final class DateUtil {
         String europeanDatePattern = "dd.MM.yyyy" + sep + "HH:mm:ss";
         DateTimeFormatter europeanDateFormatter = DateTimeFormatter.ofPattern(europeanDatePattern);
         return europeanDateFormatter.format(toLocalDateTime(date));
+    }
+
+    
+    /**
+     * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
+     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
+     *
+     * @param instant the instant object
+     * @return date as string
+     */
+    public String toDateString(Instant instant) {
+        return toDateString(instant, "@");
+    }
+
+    
+    /**
+     * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
+     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
+     *
+     * @param instant the instant object
+     * @param sep the separator
+     * @return date as string
+     */
+    public String toDateString(Instant instant, String sep) {
+        String europeanDatePattern = "dd.MM.yyyy" + sep + "HH:mm:ss";
+        DateTimeFormatter europeanDateFormatter = DateTimeFormatter.ofPattern(europeanDatePattern);
+        return europeanDateFormatter.format(instant);
     }
 
 

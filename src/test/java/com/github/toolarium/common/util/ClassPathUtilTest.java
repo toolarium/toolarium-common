@@ -139,15 +139,20 @@ public class ClassPathUtilTest {
         List<URL> urlList = new ArrayList<URL>();
         for (URL url : ClassPathUtil.getInstance().searchFileByRegExpAsURLList(".*/TestResourceFile.*")) {
             LOG.debug("URL " + url);
-            urlList.add(url);
+            if (!url.toString().contains("/bin/test/")) {
+                urlList.add(url);
+            }
         }
         
-        LOG.debug("Load file " + urlList.get(0));
-        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(0)), "Test");
-        LOG.debug("Load file " + urlList.get(1));
-        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(1)), "Test 1");
-        LOG.debug("Load file " + urlList.get(2));
-        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(2)), "Test 2");
+        int idx = 0;
+        LOG.debug("Load file [" + idx + "]: " + urlList.get(idx));
+        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(idx)), "Test");
+        idx++;
+        LOG.debug("Load file [" + idx + "]: " + urlList.get(idx));
+        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(idx)), "Test 1");
+        idx++;
+        LOG.debug("Load file [" + idx + "]: " + urlList.get(idx));
+        assertEquals(FileUtil.getInstance().readFileContent(urlList.get(idx)), "Test 2");
         
         String workingPath = FileUtil.getInstance().slashify(getWorkingPath());
         String classPath = getClasspath(workingPath, true, false).get(0);
@@ -159,6 +164,9 @@ public class ClassPathUtilTest {
             workingPath = FileUtil.SLASH_STR + workingPath;
         }
 
+        if (classPath.indexOf("/bin/test/") > 0) {
+            classPath = classPath.replace("/bin/test/", "/src/test/java/");
+        }
         if (classPath.indexOf("/build/classes/java/test/") > 0) {
             classPath = classPath.replace("/build/classes/java/test/", "/src/test/java/");
         }
