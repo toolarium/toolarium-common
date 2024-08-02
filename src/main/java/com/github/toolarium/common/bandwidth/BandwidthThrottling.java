@@ -224,31 +224,33 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
     public String toString() {
         SimpleDateFormat formatter = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss.SSS");
         TimeDifferenceFormatter df = new TimeDifferenceFormatter();
+        StringBuilder builder = new StringBuilder();
+        builder.append("Bandwidth throttling:").append(TextUtil.NL);
 
         String startTimeStr = "n/a";
-        if (startTime != null) {
-            startTimeStr = formatter.format(startTime);
-        }
-        
         String lastUpdateTimeStr = "n/a";
-        if (lastUpdateTime != null) {
-            lastUpdateTimeStr = formatter.format(lastUpdateTime);
+        String usedTimeStr = "n/a";
+
+        synchronized (this) {
+            if (startTime != null) {
+                startTimeStr = formatter.format(startTime);
+            }
+            if (lastUpdateTime != null) {
+                lastUpdateTimeStr = formatter.format(lastUpdateTime);
+            }
+            if (startTime != null && lastUpdateTime != null) {
+                usedTimeStr = df.formatAsString(lastUpdateTime - startTime);
+            }
+    
+            builder.append("bandwidth  : " + bandwidth).append(TextUtil.NL);
+            builder.append("counter    : " + count).append(TextUtil.NL);
+            builder.append("start time : " + startTimeStr).append(TextUtil.NL);
+            builder.append("last update: " + lastUpdateTimeStr).append(TextUtil.NL);
+            builder.append("used time  : " + usedTimeStr).append(TextUtil.NL);
+            builder.append(bandwidthStatisticCounter.toString("bandwidth statistic:")).append(TextUtil.NL);
+            builder.append(sleepStatisticCounter.toString("sleep time statistic:")).append(".");
         }
         
-        String usedTimeStr = "n/a";
-        if (startTime != null && lastUpdateTime != null) {
-            usedTimeStr = df.formatAsString(lastUpdateTime - startTime);
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.append("Process bandwidth throttling:").append(TextUtil.NL);
-        builder.append("bandwidth  : " + bandwidth).append(TextUtil.NL);
-        builder.append("counter    : " + count).append(TextUtil.NL);
-        builder.append("start time : " + startTimeStr).append(TextUtil.NL);
-        builder.append("last update: " + lastUpdateTimeStr).append(TextUtil.NL);
-        builder.append("used time  : " + usedTimeStr).append(TextUtil.NL);
-        builder.append(bandwidthStatisticCounter.toString("bandwidth statistic:")).append(TextUtil.NL);
-        builder.append(sleepStatisticCounter.toString("sleep time statistic:")).append(".");
         return builder.toString();
     }
 }

@@ -44,7 +44,6 @@ public final class StackTrace {
         DEFAULT_EXCLUDES.add("org.junit.");
         DEFAULT_EXCLUDES.add("org.gradle.");
         DEFAULT_EXCLUDES.add("org.eclipse.jdt.internal.");
-        DEFAULT_EXCLUDES.add("jptools.testing.TestSuite");
         where = StackTrace.class.getName();
     }
 

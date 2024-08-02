@@ -27,7 +27,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Sets the unlock timeout which defines how long an element can't be blocked again after an unlock 
+     * Sets the unlock timeout which defines how long an element can't be locked again after an unlock 
      *
      * @param timeout the unlock timeout (positive number) or null
      * @return the instance
@@ -62,7 +62,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Get the object lock statistic
+     * Get the object lock statistic (the number of lock elements)
      *
      * @return the object lock statistic
      */
@@ -70,7 +70,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Get the object unlock statistic
+     * Get the statistics of locks that could not be obtained because of the unlock timeout.
      *
      * @return the object unlock statistic
      */
@@ -78,7 +78,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Get the ignore object lock statistic
+     * Get the statistics of locks that could not be obtained because they are already locked.
      *
      * @return the ignore object lock statistic
      */

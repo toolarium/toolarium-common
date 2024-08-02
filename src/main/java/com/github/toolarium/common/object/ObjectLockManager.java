@@ -10,9 +10,9 @@ import com.github.toolarium.common.util.DateUtil;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +27,7 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(ObjectLockManager.class);
     private volatile Integer lockSize;
     private transient Map<Object, Long> lockMap;
-    private Map<Object, Long> unlockMap;
+    private transient Map<Object, Long> unlockMap;
     private StatisticCounter lockStatistic;
     private StatisticCounter unlockStatistic;
     private StatisticCounter ignoreLockStatistic;
@@ -52,9 +52,17 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
      * @param unlockTimeout the timeout after unlock an object is still not be able to lock
      */
     public ObjectLockManager(Integer lockSize, Long unlockTimeout) {
-        this.cleanupAfterUnlock = true;
+        this.lockSize = null;
+        this.lockMap = null;
+        this.unlockMap = null;
+        this.lockStatistic = null;
+        this.unlockStatistic = null;
+        this.ignoreLockStatistic = null;
+        this.lockSizeReachedCounter = 0;
         this.unlockTimeout = unlockTimeout;
-        releaseResource();
+        this.isInitialized = false;
+        this.cleanupAfterUnlock = true;
+        
         setObjectLockSize(lockSize);
     }
 
@@ -216,10 +224,6 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
     public synchronized void releaseResource() {
         this.lockMap = null;
         this.unlockMap = null;
-        this.lockStatistic = null;
-        this.unlockStatistic = null;
-        this.ignoreLockStatistic = null;
-        this.lockSizeReachedCounter = 0;
         this.isInitialized = false;        
     }
 
@@ -301,14 +305,25 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
         }
         
         if (lockMap == null) {
-            this.lockMap = new HashMap<Object, Long>();
+            this.lockMap = new ConcurrentHashMap<Object, Long>();
         }
         
-        this.unlockMap = new HashMap<Object, Long>();
-        this.ignoreLockStatistic = new StatisticCounter();
-        this.lockStatistic = new StatisticCounter();
-        this.unlockStatistic = new StatisticCounter();
-        this.lockSizeReachedCounter = 0;
+        if (unlockMap == null) {
+            this.unlockMap = new ConcurrentHashMap<Object, Long>();
+        }
+        
+        if (ignoreLockStatistic == null) {
+            this.ignoreLockStatistic = new StatisticCounter();
+        }
+        
+        if (lockStatistic == null) {
+            this.lockStatistic = new StatisticCounter();
+        }
+        
+        if (unlockStatistic == null) {
+            this.unlockStatistic = new StatisticCounter();
+        }
+        
         this.isInitialized = true;
     }
 }

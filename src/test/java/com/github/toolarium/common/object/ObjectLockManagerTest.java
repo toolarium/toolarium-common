@@ -53,6 +53,8 @@ public class ObjectLockManagerTest {
         assertEquals(LIST1, o.lock(LIST1));
         assertEquals(LIST1, o.unlock(LIST1));
         assertObjectLockManagerStatistic(o, 6.0, 0.0, 1.7, 0L);
+        o.releaseResource();
+        assertObjectLockManagerStatistic(o, 6.0, 0.0, 1.7, 0L);
     }
 
     
@@ -76,6 +78,8 @@ public class ObjectLockManagerTest {
 
         assertEquals(LIST2, o.lock(LIST1));
         assertEquals(LIST2, o.unlock(LIST2));
+        assertObjectLockManagerStatistic(o, 3.0, 0.0, 0.0, 4L);
+        o.releaseResource();
         assertObjectLockManagerStatistic(o, 3.0, 0.0, 0.0, 4L);
     }
 
@@ -113,9 +117,11 @@ public class ObjectLockManagerTest {
         assertEquals(LIST1, o.lock(LIST1));
         assertEquals(LIST1, o.unlock(LIST1));
         assertObjectLockManagerStatistic(o, 3.3, 2.6, 0.0, 4L);
+        o.releaseResource();
+        assertObjectLockManagerStatistic(o, 3.3, 2.6, 0.0, 4L);
     }
 
-
+    
     /**
      * Assert statistic
      *
