@@ -303,7 +303,7 @@ public final class DateUtil {
 
     
     /**
-     * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
+     * Converts a given date back into toolarium-date-notation and returns a well formed string of the following format:
      * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
      *
      * @param date the date object
@@ -318,7 +318,7 @@ public final class DateUtil {
 
     
     /**
-     * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
+     * Converts a given date back into toolarium-date-notation and returns a well formed string of the following format:
      * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
      *
      * @param instant the instant object
@@ -330,7 +330,7 @@ public final class DateUtil {
 
     
     /**
-     * Converts a given date back into jptools-date-notation and returns a well formed string of the following format:
+     * Converts a given date back into toolarium-date-notation and returns a well formed string of the following format:
      * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
      *
      * @param instant the instant object
