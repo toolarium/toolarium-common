@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 0.8.3 ] - 2024-08-02
+## [ 0.9.0 ] - 2024-12-26
+### Added
+- Added isReadable and isWritable in FileUtil.
+- Added Assert util class.
+- Added splitAsList by length in StringUtil.
+- Added ExceptionWrapper.
+- Added JavaVersion.
+
+### Fixed
+- Java 1.8 support.
+- Bugfix ClassInstanceUtil.isClassAvailable.
 
 ## [ 0.8.2 ] - 2024-08-02
 ### Changed
