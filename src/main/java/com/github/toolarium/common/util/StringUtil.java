@@ -412,12 +412,42 @@ public final class StringUtil {
         return sb.toString();
     }  
 
+
+    /**
+     * Split a string into a list by length
+     * 
+     * @param splitString the string to split
+     * @param partLength the length into which the input string is to be divided
+     * @return the string list or null
+     */
+    public List<String> splitAsList(String splitString, int partLength) {
+        if (splitString == null) {
+            return null;
+        }
+
+        if (partLength <= 0 || splitString.length() <= partLength) {
+            return List.of(splitString);
+        }
+
+        int len = splitString.length();
+        int nparts = (len + partLength - 1) / partLength;
+        List<String> result = new ArrayList<String>(nparts);
+
+        int offset = 0;
+        for (int i = 0; i < nparts; i++) {
+            result.add(splitString.substring(offset, Math.min(offset + partLength, len)));
+            offset += partLength;
+        }
+
+        return result;
+    }
+
     
     /**
      * Split a string into a list 
      * 
      * @param expression the expression to split
-     * @param splitString the split string
+     * @param splitString the string, whereby the expression string is split
      * @return the string list or null
      */
     public List<String> splitAsList(String expression, String splitString) {
@@ -459,10 +489,29 @@ public final class StringUtil {
 
     
     /**
+     * Split a string into an array by length
+     * 
+     * @param splitString the string to split
+     * @param partLength the length into which the input string is to be divided
+     * @return the array or null
+     */
+    public String[] splitAsArray(String splitString, int partLength) {
+        List<String> result = splitAsList(splitString, partLength);
+        if (result == null) {
+            return null;
+        }
+
+        String[] resultArr = new String[result.size()];
+        resultArr = result.toArray(resultArr);
+        return resultArr;
+    }
+
+    
+    /**
      * Split a string into an array 
      * 
      * @param expression the expression to split
-     * @param splitString the split string
+     * @param splitString the string, whereby the expression string is split
      * @return the array or null
      */
     public String[] splitAsArray(String expression, String splitString) {

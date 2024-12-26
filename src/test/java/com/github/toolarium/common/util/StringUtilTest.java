@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
  * @author patrick
  */
 public class StringUtilTest {
+    private static final String EMPTY_ARRAY_STRING = "[]";
     private static final String SLASH = "/";
     private static final String NUMBERS = "12345678901234567890";
     private static final String A_SIMPLE_EXAMPLE = "a simple example";
@@ -150,8 +151,8 @@ public class StringUtilTest {
     @Test
     public void testSplitAsList() {
         assertNull(StringUtil.getInstance().splitAsList(null, null));
-        assertEquals("[]", StringUtil.getInstance().splitAsList("", null).toString());
-        assertEquals("[]", StringUtil.getInstance().splitAsList("", "").toString());
+        assertEquals(EMPTY_ARRAY_STRING, StringUtil.getInstance().splitAsList("", null).toString());
+        assertEquals(EMPTY_ARRAY_STRING, StringUtil.getInstance().splitAsList("", "").toString());
         assertNull(StringUtil.getInstance().splitAsList(null, ""));
 
         assertEquals("[1]", StringUtil.getInstance().splitAsList("1", "").toString());
@@ -171,13 +172,51 @@ public class StringUtilTest {
     @Test
     public void testSplitAsArray() {
         assertNull(StringUtil.getInstance().splitAsArray(null, null));
-        assertEquals("[]", Arrays.asList(StringUtil.getInstance().splitAsArray("", null)).toString());
-        assertEquals("[]", Arrays.asList(StringUtil.getInstance().splitAsArray("", "")).toString());
+        assertEquals(EMPTY_ARRAY_STRING, Arrays.asList(StringUtil.getInstance().splitAsArray("", null)).toString());
+        assertEquals(EMPTY_ARRAY_STRING, Arrays.asList(StringUtil.getInstance().splitAsArray("", "")).toString());
         assertNull(StringUtil.getInstance().splitAsArray(null, ""));
 
         assertEquals("[1, 2, 3]", Arrays.asList(StringUtil.getInstance().splitAsArray("123", "")).toString());
         assertEquals("[1, 2, 3]", Arrays.asList(StringUtil.getInstance().splitAsArray("1/2/3", SLASH)).toString());
         assertEquals("[1, 2, 3]", Arrays.asList(StringUtil.getInstance().splitAsArray("1/@*2/@*3", "/@*")).toString());
+    }
+
+    
+    /**
+     * Test the split
+     */
+    @Test
+    public void testSplitAsListByLength() {
+        assertNull(StringUtil.getInstance().splitAsList(null, -1));
+        assertNull(StringUtil.getInstance().splitAsList(null, 0));
+        assertNull(StringUtil.getInstance().splitAsList(null, 1));
+        assertEquals(EMPTY_ARRAY_STRING, StringUtil.getInstance().splitAsList("", -1).toString());
+        assertEquals(EMPTY_ARRAY_STRING, StringUtil.getInstance().splitAsList("", 0).toString());
+        assertEquals(EMPTY_ARRAY_STRING, StringUtil.getInstance().splitAsList("", 1).toString());
+
+        assertEquals("[1, 2, 3, 4, 5, 6]", StringUtil.getInstance().splitAsList("123456", 1).toString());
+        assertEquals("[12, 34, 56, 7]", StringUtil.getInstance().splitAsList("1234567", 2).toString());
+        assertEquals("[123456]", StringUtil.getInstance().splitAsList("123456", 6).toString());
+        assertEquals("[123456]", StringUtil.getInstance().splitAsList("123456", 7).toString());
+    }
+
+    
+    /**
+     * Test the split
+     */
+    @Test
+    public void testSplitAsArrayByLength() {
+        assertNull(StringUtil.getInstance().splitAsArray(null, -1));
+        assertNull(StringUtil.getInstance().splitAsArray(null, 0));
+        assertNull(StringUtil.getInstance().splitAsArray(null, 1));
+        assertEquals(EMPTY_ARRAY_STRING, Arrays.asList(StringUtil.getInstance().splitAsArray("", -1)).toString());
+        assertEquals(EMPTY_ARRAY_STRING, Arrays.asList(StringUtil.getInstance().splitAsArray("", 0)).toString());
+        assertEquals(EMPTY_ARRAY_STRING, Arrays.asList(StringUtil.getInstance().splitAsArray("", 1)).toString());
+
+        assertEquals("[1, 2, 3, 4, 5]", Arrays.asList(StringUtil.getInstance().splitAsArray("12345", 1)).toString());
+        assertEquals("[12, 34, 5]", Arrays.asList(StringUtil.getInstance().splitAsArray("12345", 2)).toString());
+        assertEquals("[12345]", Arrays.asList(StringUtil.getInstance().splitAsArray("12345", 5)).toString());
+        assertEquals("[12345]", Arrays.asList(StringUtil.getInstance().splitAsArray("12345", 6)).toString());
     }
 
     
