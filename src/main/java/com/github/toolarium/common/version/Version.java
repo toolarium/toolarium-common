@@ -692,7 +692,7 @@ public class Version extends AbstractVersion implements Comparable<Version>, Ser
          */
         @Override
         public String toString() {
-            if (suffix != null && !suffix.isBlank()) {
+            if (suffix != null && !suffix.isEmpty() && !suffix.trim().isEmpty()) { // TODO: isBlank
                 return "" + number + suffix;
             }
             
@@ -928,7 +928,7 @@ public class Version extends AbstractVersion implements Comparable<Version>, Ser
      * @return the splitted data
      */
     protected VersionNumberElement splitNumberAndSuffix(String[] data, int idx, String errorMessageDetail) {
-        if (data == null || data.length == 0 || idx >= data.length || data[idx] == null || data[idx].isBlank()) {
+        if (data == null || data.length == 0 || idx >= data.length || data[idx] == null || data[idx].isEmpty() || data[idx].trim().isEmpty()) { // TODO: isBlank
             return null;
         }
         

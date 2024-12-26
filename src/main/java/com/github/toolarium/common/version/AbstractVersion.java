@@ -162,7 +162,7 @@ public abstract class AbstractVersion {
     protected void throwInvalidVersion(boolean isTrue, String errorDetailMessage) throws IllegalArgumentException {
         if (isTrue) {
             String detail = "";
-            if (errorDetailMessage != null && !errorDetailMessage.isBlank()) {
+            if (errorDetailMessage != null && !errorDetailMessage.isEmpty() && !errorDetailMessage.trim().isEmpty()) { // TODO: isBlank
                 detail = " (" + errorDetailMessage + ")";
             }
             throw new IllegalArgumentException("Invalid version" + detail + ":" + getOriginalVersion());
