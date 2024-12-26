@@ -61,7 +61,7 @@ public final class ReflectionUtil {
      * @throws IllegalArgumentException In case of an invalid class name
      */
     public boolean isClassAvailable(String className) throws IllegalArgumentException {
-        if (className == null || className.isBlank()) {
+        if (className == null || className.isEmpty() || className.trim().isEmpty()) { // TODO: isBlank()
             throw new IllegalArgumentException("Invalid class name!");
         }
         
@@ -86,7 +86,7 @@ public final class ReflectionUtil {
      * @throws ClassNotFoundException in case of error
      */
     public <T> Class<T> getClassObject(String className) throws IllegalArgumentException, ClassNotFoundException {
-        if (className == null || className.isBlank()) {
+        if (className == null || className.isEmpty() || className.trim().isEmpty()) { // TODO: isBlank()
             throw new IllegalArgumentException("Invalid class name!");
         }
         
@@ -199,8 +199,7 @@ public final class ReflectionUtil {
             field.setAccessible(true);
             Object unsafe = field.get(null);
 
-            Method putObjectVolatile = unsafeClass.getDeclaredMethod("putObjectVolatile", Object.class, long.class,
-                    Object.class);
+            Method putObjectVolatile = unsafeClass.getDeclaredMethod("putObjectVolatile", Object.class, long.class, Object.class);
             Method staticFieldOffset = unsafeClass.getDeclaredMethod("staticFieldOffset", Field.class);
             Class<?> loggerClass = Class.forName("jdk.internal.module.IllegalAccessLogger");
             Field loggerField = loggerClass.getDeclaredField("logger");
