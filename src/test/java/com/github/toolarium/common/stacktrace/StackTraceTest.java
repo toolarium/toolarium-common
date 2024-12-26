@@ -106,6 +106,7 @@ public class StackTraceTest {
         excludes = new ArrayList<String>(StackTrace.DEFAULT_EXCLUDES);
         excludes.add("java.util.concurrent."); // java 1.8
         excludes.add("java.lang."); // java 1.8
+        excludes.add("jdk.proxy"); // java 21
         excludes.add("worker.org.gradle.");
 
         StackTraceElement[] elements = StackTrace.parseStackTraceElements(t1, 0, -1);

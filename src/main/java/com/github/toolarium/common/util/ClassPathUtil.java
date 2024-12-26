@@ -399,6 +399,7 @@ public final class ClassPathUtil {
      * @param c the classes
      * @param prefixFilter the prefix filter
      */
+    @SuppressWarnings("deprecation")
     private void addClassesInArchive(File archive, ClassList c, String prefixFilter) {
         ZipFile zip = null;
         try {

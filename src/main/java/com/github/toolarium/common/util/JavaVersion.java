@@ -182,7 +182,6 @@ public enum JavaVersion {
      * 
      * @param version the version number
      * @return the java version information
-     * @throws ParseException in case of error 
      */
     public static JavaVersion convertJavaVersion(String version) {
         if (version == null || version.isEmpty()) {
