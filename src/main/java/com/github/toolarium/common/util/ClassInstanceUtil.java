@@ -126,7 +126,7 @@ public final class ClassInstanceUtil {
      */
     public boolean isClassAvailable(String className) {
         try {
-            Class.forName(className, false, ClassInstanceUtil.class.getClassLoader());
+            Class.forName(className);
             return true;
         } catch (NoClassDefFoundError | Exception e) {
             return false;
