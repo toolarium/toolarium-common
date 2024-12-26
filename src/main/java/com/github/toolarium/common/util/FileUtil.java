@@ -101,6 +101,46 @@ public final class FileUtil {
 
     
     /**
+     * Checks whether the given file is readable.
+     * 
+     * @param fileName the filename to be checked
+     * @return true if the file can be read otherwise false
+     */
+    public boolean isReadable(String fileName) {
+        if (fileName == null) {
+            return false;
+        }
+        
+        File fileToCheck = new File(fileName);
+        if (!fileToCheck.exists()) {
+            return false;
+        }
+        
+        return fileToCheck.canRead();
+    }
+
+    
+    /**
+     * Checks whether the given file is writable.
+     * 
+     * @param fileName the filename to be checked
+     * @return true if the file can be written otherwise false
+     */
+    public boolean isWritable(String fileName) {
+        if (fileName == null) {
+            return false;
+        }
+
+        File fileToCheck = new File(fileName);
+        if (!fileToCheck.exists()) {
+            return false;
+        }
+
+        return fileToCheck.canWrite();
+    }
+    
+    
+    /**
      * Extract the path from an url
      *
      * @param url the url
@@ -130,6 +170,7 @@ public final class FileUtil {
         return result;
     }
 
+    
     /**
      * Read the file content
      *
