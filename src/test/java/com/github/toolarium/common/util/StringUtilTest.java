@@ -38,6 +38,21 @@ public class StringUtilTest {
     private static final String IS_IT_A_SIMPLE_EXAMPLE_SNAKE_CASE = "IS_IT_A_SIMPLE_EXAMPLE";
 
     
+    /** 
+     * Test
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testReplace() {
+        assertEquals("Z4567890Z4567890", "12345678901234567890".replace("123", "Z"));
+        assertEquals("YYYYYYYYY", "ZZZZZZZZZ".replace("Z", "Y"));
+        assertEquals("YYYYYYYYY", "ABABABABABABABABAB".replace("AB", "Y"));
+        assertEquals("ABABABABABABABABAB", "BBBBBBBBB".replace("B", "AB"));
+        assertEquals("\\.\\.\\.\\.", "....".replace(".", "\\."));
+        assertEquals("AB\\.CD", "AB*CD".replace("*", "\\."));
+    }
+
+    
     /**
      * Test new string
      */

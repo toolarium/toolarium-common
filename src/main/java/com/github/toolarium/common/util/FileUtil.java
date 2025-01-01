@@ -14,6 +14,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 
 /**
@@ -55,7 +56,69 @@ public final class FileUtil {
         return HOLDER.INSTANCE;
     }
 
+    
+    /**
+     * Simplify a given path
+     *
+     * @param path the path to simplify
+     * @return the path
+     */
+    public String simplifyPath(String path) {
+        if (path == null) {
+            return null;
+        }
 
+        String result = path.trim();
+        if (result.length() == 0) {
+            return result;
+        }
+
+        result = StringUtil.getInstance().trimRight(result.replace(BACKSLASH, SLASH), SLASH);
+        List<String> pathList = StringUtil.getInstance().splitAsList(result, SLASH_STR);
+
+        // simplify path
+        String pathElement;
+        int i = 0;
+        while (i >= 0 && i < pathList.size()) {
+            pathElement = pathList.get(i);
+
+            if ("..".equals(pathElement)) {
+                if ((i - 1) >= 0) {
+                    pathList.remove(i - 1);
+                }
+
+                if ((i - 1) >= 0) {
+                    pathList.remove(i - 1);
+                }
+                
+                i--;
+            } else {
+                i++;
+            }
+        }
+
+        // put string together
+        result = "";
+        for (String p : pathList) {
+            if (result.length() == 0) {
+                result = p;
+            } else {
+                result += SLASH_STR + p;
+            }
+        }
+
+        if (path.endsWith(SLASH_STR) && !result.endsWith(SLASH_STR)) {
+            result += SLASH_STR;
+        }
+
+        if (path.startsWith(SLASH_STR) && !result.startsWith(SLASH_STR)) {
+            result = SLASH_STR + result;
+        }
+
+        return result;
+    }
+
+    
     /**
      * Slashify the path
      *
@@ -101,7 +164,22 @@ public final class FileUtil {
 
     
     /**
-     * Checks whether the given file is readable.
+     * Check if a given file exist
+     *
+     * @param fileName the filename
+     * @return true if the file exist otherwise false
+     */
+    public boolean existFile(String fileName) {
+        if (fileName == null) {
+            return false;
+        }
+
+        return new File(fileName).exists();
+    }
+
+    
+    /**
+     * Checks whether the given file or directory is readable.
      * 
      * @param fileName the filename to be checked
      * @return true if the file can be read otherwise false
@@ -111,17 +189,13 @@ public final class FileUtil {
             return false;
         }
         
-        File fileToCheck = new File(fileName);
-        if (!fileToCheck.exists()) {
-            return false;
-        }
-        
-        return fileToCheck.canRead();
+        final File fileToCheck = new File(fileName);
+        return fileToCheck.exists() && fileToCheck.canRead();
     }
 
     
     /**
-     * Checks whether the given file is writable.
+     * Checks whether the given file or directory is writable.
      * 
      * @param fileName the filename to be checked
      * @return true if the file can be written otherwise false
@@ -131,12 +205,89 @@ public final class FileUtil {
             return false;
         }
 
-        File fileToCheck = new File(fileName);
-        if (!fileToCheck.exists()) {
+        final File fileToCheck = new File(fileName);
+        return fileToCheck.exists() && fileToCheck.canWrite();
+    }
+
+    
+    /**
+     * Removes a file
+     *
+     * @param fileName the file to remove
+     * @return returns true if all deletions were successful.
+     */
+    public boolean removeFile(String fileName) {
+        if (fileName == null) {
             return false;
         }
 
-        return fileToCheck.canWrite();
+        return removeFile(new File(fileName));
+    }
+
+    
+    /**
+     * Removes a file
+     *
+     * @param file the file to remove
+     * @return removes a file
+     */
+    public boolean removeFile(File file) {
+        if (file == null) {
+            return false;
+        }
+        
+        if (file.delete()) {
+            return true;
+        }
+        
+        // try again
+        System.gc(); // CHECKSTYLE IGNORE THIS LINE
+
+        try {
+            Thread.sleep(100L);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+
+        return file.delete();
+    }
+
+    
+    /**
+     * Deletes all files and sub directories under dir. If a deletion fails, the method stops attempting to delete and returns false.
+     * 
+     * @param dir the directory to delete
+     * @return returns true if all deletions were successful.
+     */
+    public boolean removeDirectory(Path dir) {
+        return removeDirectory(dir.toFile());
+    }
+
+    /**
+     * Deletes all files and sub directories under dir. If a deletion fails, the method stops attempting to delete and returns false.
+     * 
+     * @param dir the directory to delete
+     * @return returns true if all deletions were successful.
+     */
+    public boolean removeDirectory(File dir) {
+        if (dir == null) {
+            return false;
+        }
+
+        if (dir.isDirectory()) {
+            String[] children = dir.list();
+
+            for (int i = 0; i < children.length; i++) {
+                boolean success = removeDirectory(new File(dir, children[i]));
+
+                if (!success) {
+                    return false;
+                }
+            }
+        }
+
+        // the directory is now empty so delete it
+        return removeFile(dir);
     }
     
     
@@ -224,7 +375,7 @@ public final class FileUtil {
         return new String(Files.readAllBytes(file), charset);
     }
 
-
+    
     /**
      * Read file content from a url
      *
@@ -248,5 +399,55 @@ public final class FileUtil {
                 src.close();
             }
         }
+    }
+
+    
+    /**
+     * Write the file content
+     *
+     * @param file the file
+     * @param content the content
+     * @throws IOException In case of an IO error
+     */
+    public void writeFileContent(Path file, String content) throws IOException {
+        writeFileContent(file, StandardCharsets.UTF_8, content); 
+    }
+
+    
+    /**
+     * Write the file content
+     *
+     * @param file the file
+     * @param content the content
+     * @throws IOException In case of an IO error
+     */
+    public void writeFileContent(File file, String content) throws IOException {
+        writeFileContent(file.toPath(), StandardCharsets.UTF_8, content); 
+    }
+
+    
+    /**
+     * Write the file content
+     *
+     * @param file the file
+     * @param charset the charset
+     * @param content the content
+     * @throws IOException In case of an IO error
+     */
+    public void writeFileContent(File file, Charset charset, String content) throws IOException {
+        writeFileContent(file.toPath(), charset, content); 
+    }
+
+    
+    /**
+     * Write the file content
+     *
+     * @param file the file
+     * @param charset the charset
+     * @param content the content
+     * @throws IOException In case of an IO error
+     */
+    public void writeFileContent(Path file, Charset charset, String content) throws IOException {
+        Files.write(file, content.getBytes(charset)); 
     }
 }

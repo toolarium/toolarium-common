@@ -257,6 +257,10 @@ public final class StringUtil {
             occurrence++;
         }
         
+        if (occurrence == 0) {
+            return data;
+        }
+        
         return data.substring(0, data.length() - occurrence);
     }
     
@@ -289,7 +293,11 @@ public final class StringUtil {
         for (int i = 0; (i < len) && (data.charAt(i) == ch); i++) {
             occurrence++;
         }
-        
+
+        if (occurrence == 0) {
+            return data;
+        }
+
         return data.substring(occurrence, data.length());
     }
 
