@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  *  
  * @author patrick
  */
-public class SemanticVersionTest {
+public class SemanticVersionTest extends AbstractVersionTest {
     private static final String V1_0_0 = "1.0.0";
     private static final String V1_0_0_ALPHA_1 = "1.0.0-alpha.1";
     private static final String V1_0_0_ALPHA_BETA = "1.0.0-alpha.beta";
@@ -509,6 +509,69 @@ public class SemanticVersionTest {
     }
     
     
+    
+    /**
+     * Test sort version
+     */
+    @Test
+    public void testSortVersion() {
+        List<String> list = getVersionList(true);
+        Collections.sort(list, Collections.reverseOrder());
+        final String orderedList = list.toString().replace("0.4.5, 0.4.2, 0.4.11-b, 0.4.11,", "0.4.11, 0.4.11-b, 0.4.5, 0.4.2,");
+        list.addAll(VERSION_LIST_INVALID);
+        Collections.shuffle(list);
+        
+        List<String> invalidVersionList = new ArrayList<String>();
+        List<SemanticVersion> versionList = SemanticVersion.convert(list, invalidVersionList);
+
+        assertEquals(orderedList, versionList.toString());
+        Collections.sort(VERSION_LIST_INVALID);
+        assertEquals(VERSION_LIST_INVALID.toString(), invalidVersionList.toString());
+    }
+
+    
+    /**
+     * Test filter version
+     */
+    @Test
+    public void testFilterVersions() {
+        List<String> list = getVersionList(true);
+        list.addAll(VERSION_LIST_INVALID);
+        Collections.shuffle(list);
+        
+        List<String> invalidVersionList = new ArrayList<String>();
+        List<SemanticVersion> versionList = SemanticVersion.convert(list, invalidVersionList);
+        Collections.shuffle(versionList);
+
+        assertEquals("[]", SemanticVersion.filter(versionList, 0, 0, 0, false).toString());
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 0, 0, false).toString());
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 1, 0, false).toString());
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 1, 1, false).toString());
+        assertEquals("[2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 1, 1, 2, false).toString());
+        assertEquals("[2.2.1, 2.1.2]", SemanticVersion.filter(versionList, 1, 2, 1, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1]", SemanticVersion.filter(versionList, 1, 2, 2, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0]", SemanticVersion.filter(versionList, 1, 2, 3, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.2, 2.0.1, 2.0.0]", SemanticVersion.filter(versionList, 1, 3, 3, false).toString());
+        
+        // test previous major settings
+        assertEquals("[2.2.1, 1.3.4]", SemanticVersion.filter(versionList, 2, 1, 1, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4]", SemanticVersion.filter(versionList, 2, 1, 2, 1, 1, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3]", SemanticVersion.filter(versionList, 2, 1, 2, 1, 2, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.2.4]", SemanticVersion.filter(versionList, 2, 1, 2, 2, 1, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 1, 2, 2, 2, false).toString());
+        
+        // same test cases
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 2, 2, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 2, 2, 2, 2, false).toString());
+        assertEquals("[2.1.0, 2.0.2, 2.0.1, 2.0.0, 1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, 1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
+                     + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.11-b, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
+                     + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]", SemanticVersion.filter(versionList, 2, 2, 2, true).toString());
+
+        Collections.sort(VERSION_LIST_INVALID);
+        assertEquals(VERSION_LIST_INVALID.toString(), invalidVersionList.toString());
+    }
+
+    
     /**
      * Test
      * 
@@ -531,6 +594,4 @@ public class SemanticVersionTest {
         }
         assertEquals(build, version.getBuild());
     }
-        
-    
 }

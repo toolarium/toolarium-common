@@ -7,6 +7,9 @@ package com.github.toolarium.common.version;
 
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 
@@ -15,7 +18,7 @@ import java.util.Objects;
  * 
  * @author patrick
  */
-public class Version extends AbstractVersion implements Comparable<Version>, Serializable {
+public class Version extends AbstractVersion<Version> implements Comparable<Version>, Serializable {
     private static final long serialVersionUID = 3833465089511798073L;
     private static final String DOT_STR = ".";
     private static final String BACKSLASH_ESCAPED = "\\";
@@ -106,7 +109,7 @@ public class Version extends AbstractVersion implements Comparable<Version>, Ser
         throwInvalidVersion(this.patch == null && getType() == VersionType.STRICT, "no patch version");
     }
 
-
+    
     /**
      * Get the major part of the version.
      * Example: for "1.2.3" = 1
@@ -420,6 +423,38 @@ public class Version extends AbstractVersion implements Comparable<Version>, Ser
         return VersionDiff.NONE;    
     }
     
+
+    /**
+     * Convert a string list into a version list
+     *
+     * @param list the list of versions to convert
+     * @param invalidVersionList the list of invalid versions
+     * @return the version list
+     */
+    public static List<Version> convert(List<String> list, List<String> invalidVersionList) {
+        List<Version> result = new ArrayList<Version>();
+        
+        if (list != null && !list.isEmpty()) {
+            for (String version : list) {
+                try {
+                    result.add(new Version(version));
+                } catch (IllegalArgumentException e) {
+                    if (invalidVersionList != null) {
+                        invalidVersionList.add(version);
+                    }
+                }
+            }
+            
+            sort(result);
+            
+            if (invalidVersionList != null) {
+                Collections.sort(invalidVersionList);
+            }
+        }
+        
+        return result;
+    }
+
     
     /**
      * Get strict version of the current

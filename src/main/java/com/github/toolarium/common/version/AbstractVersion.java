@@ -5,13 +5,17 @@
  */
 package com.github.toolarium.common.version;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 
 /**
  * The version base class
  * 
  * @author patrick
  */
-public abstract class AbstractVersion {
+public abstract class AbstractVersion<T> {
     private final String originalVersion;
     private final VersionType versionType;
     private final String versionStr;
@@ -41,6 +45,33 @@ public abstract class AbstractVersion {
     
     
     /**
+     * Get the major part of the version.
+     * Example: for "1.2.3" = 1
+     *
+     * @return the major part of the version
+     */
+    protected abstract int getMajorNumber();
+
+    
+    /**
+     * Get the minor part of the version.
+     * Example: for "1.2.3" = 2
+     *
+     * @return the minor part of the version
+     */
+    protected abstract int getMinorNumber();
+    
+    
+    /**
+     * Get the patch part of the version.
+     * Example: for "1.2.3" = 3
+     *
+     * @return the patch part of the version
+     */
+    protected abstract int getPatchNumber();
+
+    
+    /**
      * @see java.lang.Object#equals(java.lang.Object)
      */
     @Override
@@ -53,7 +84,8 @@ public abstract class AbstractVersion {
             return false;
         }
         
-        AbstractVersion version = (AbstractVersion) o;
+        @SuppressWarnings("unchecked")
+        AbstractVersion<T> version = (AbstractVersion<T>) o;
         return versionStr.equals(version.versionStr);
     }
     
@@ -73,6 +105,174 @@ public abstract class AbstractVersion {
     @Override 
     public String toString() {
         return versionStr;
+    }
+
+    
+    /**
+     * Sort the version list
+     *
+     * @param <T> the generic type
+     * @param list the list to sort
+     */
+    public static <T extends AbstractVersion<T>> void sort(List<T> list) {
+        Collections.sort(list, Collections.reverseOrder());
+        //Collections.sort(list);
+    }
+
+
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list) {
+        return filter(list, 1, 2, 2, 1, 1, false);
+    }
+
+    
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, boolean invertFilter) {
+        return filter(list, 1, 2, 2, 1, 1, invertFilter);
+    }
+
+    
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param minorThreshold the minor threshold, the number of minor element to keep
+     * @param patchThreshold the patch threshold, the number of patch element to keep
+     * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold, boolean invertFilter) {
+        return filter(list, majorThreshold, minorThreshold, patchThreshold, minorThreshold, patchThreshold, invertFilter);
+    }
+
+    
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param minorThreshold the minor threshold, the number of minor element to keep
+     * @param patchThreshold the patch threshold, the number of patch element to keep
+     * @param previousMajorMinorThreshold the minor version number threshold of previous major version
+     * @param previousMajorPatchThreshold the patch version number threshold of previous major version
+     * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold, int previousMajorMinorThreshold, int previousMajorPatchThreshold, boolean invertFilter) {
+        List<T> filteredVersions = new ArrayList<T>();
+        int majorVersionCount = 0;
+        int minorVersionCount = 0;
+        int patchVersionCount = 0;
+        int previousMajor = -1;
+        int previousMinor = -1;
+        //int previousPatch = -1;
+        
+        Collections.sort(list, Collections.reverseOrder());
+        
+        int currentMinorThreshold = minorThreshold;
+        int currentPatchThreshold = patchThreshold;
+        for (T version : list) {
+            if (previousMajor >= 0) {
+                if (previousMajor == version.getMajorNumber()) {
+                    if (previousMinor >= 0) {
+                        if (previousMinor == version.getMinorNumber()) {
+                            if (currentPatchThreshold > patchVersionCount) {
+                                //previousPatch = version.getPatchNumber();
+                                patchVersionCount++;
+                                
+                                if (!invertFilter) { // CHECKSTYLE IGNORE THIS LINE
+                                    filteredVersions.add(version);
+                                }
+                            } else {
+                                if (invertFilter) {
+                                    filteredVersions.add(version);
+                                }
+                            }
+                        } else {
+                            if (currentMinorThreshold > minorVersionCount) {
+                                previousMinor = version.getMinorNumber();
+                                minorVersionCount++;
+                                patchVersionCount = 1;
+                                
+                                if (!invertFilter) {
+                                    filteredVersions.add(version);
+                                }
+                            } else {
+                                if (invertFilter) {
+                                    filteredVersions.add(version);
+                                }
+                            }
+                        }
+                    } else {
+                        previousMinor = version.getMinorNumber();
+                        minorVersionCount++;
+                        //previousPatch = version.getPatchNumber();
+                        patchVersionCount = 1;
+                        
+                        if (!invertFilter) {
+                            filteredVersions.add(version);
+                        }
+                    }
+                } else {
+                    if (majorThreshold > majorVersionCount) {
+                        previousMajor = version.getMajorNumber();
+                        majorVersionCount++;
+                        previousMinor = version.getMinorNumber();
+                        //previousPatch = version.getPatchNumber();
+
+                        if (majorVersionCount > 1) {
+                            minorVersionCount = 1;
+                            patchVersionCount = 1;
+                        }
+                        
+                        if (!invertFilter) {
+                            filteredVersions.add(version);
+                        }
+                    } else {
+                        if (invertFilter) {
+                            filteredVersions.add(version);
+                        }
+                    }
+                } 
+            } else {
+                
+                previousMajor = version.getMajorNumber();
+                majorVersionCount++;
+                previousMinor = version.getMinorNumber();
+                minorVersionCount = 1;
+                //previousPatch = version.getPatchNumber();
+                patchVersionCount = 1;
+
+                if (majorThreshold >= majorVersionCount) {
+                    if (!invertFilter) {
+                        filteredVersions.add(version);
+                    }
+                }
+            }
+            
+            if (majorVersionCount > 1) {
+                currentMinorThreshold = previousMajorMinorThreshold;
+                currentPatchThreshold = previousMajorPatchThreshold;
+            }
+        }        
+        
+        return filteredVersions;
     }
 
     

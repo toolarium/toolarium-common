@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 0.9.2 ] - 2025-01-01
+## [ 0.9.2 ] - 2025-01-25
+### Added
+- Added static convert method on Version adn SemanticVersion classes to convert from string representation.
+- Added sort and filter functions for Version and SemanticVersion classes.
+- Added unit tests for convert, sort and filter.
 
 ## [ 0.9.1 ] - 2025-01-01
 ### Added

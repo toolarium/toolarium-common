@@ -6,7 +6,9 @@
 package com.github.toolarium.common.version;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -16,7 +18,7 @@ import java.util.Objects;
  * TODO: cargo support https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html, https://guides.cocoapods.org/using/the-podfile.html
  * @author patrick
  */
-public class SemanticVersion extends AbstractVersion implements Comparable<SemanticVersion>, Serializable {
+public class SemanticVersion extends AbstractVersion<SemanticVersion> implements Comparable<SemanticVersion>, Serializable {
     private static final long serialVersionUID = 7953136231878785785L;
     private static final String DOT_STR = ".";
     private static final String MINUS_CHARACTER = "-";
@@ -72,6 +74,19 @@ public class SemanticVersion extends AbstractVersion implements Comparable<Seman
         return major;
     }
     
+    
+    /**
+     * @see com.github.toolarium.common.version.AbstractVersion#getMajorNumber()
+     */
+    @Override
+    protected int getMajorNumber() {
+        if (major == null) {
+            return -1;
+        }
+        
+        return major.intValue();
+    }
+
 
     /**
      * Get the minor part of the version.
@@ -85,6 +100,19 @@ public class SemanticVersion extends AbstractVersion implements Comparable<Seman
 
     
     /**
+     * @see com.github.toolarium.common.version.AbstractVersion#getMinorNumber()
+     */
+    @Override
+    protected int getMinorNumber() {
+        if (minor == null) {
+            return -1;
+        }
+        
+        return minor.intValue();
+    }
+
+    
+    /**
      * Get the patch part of the version.
      * Example: for "1.2.3" = 3
      *
@@ -92,6 +120,19 @@ public class SemanticVersion extends AbstractVersion implements Comparable<Seman
      */
     public Integer getPatch() {
         return patch;
+    }
+
+
+    /**
+     * @see com.github.toolarium.common.version.AbstractVersion#getPatchNumber()
+     */
+    @Override
+    protected int getPatchNumber() {
+        if (patch == null) {
+            return -1;
+        }
+        
+        return patch.intValue();
     }
 
     
@@ -390,7 +431,39 @@ public class SemanticVersion extends AbstractVersion implements Comparable<Seman
         return VersionDiff.NONE;    
     }
 
+    
+    /**
+     * Convert a string list into a version list
+     *
+     * @param list the list of versions to convert
+     * @param invalidVersionList the list of invalid versions which will be filled up during the convertion
+     * @return the version list
+     */
+    public static List<SemanticVersion> convert(List<String> list, List<String> invalidVersionList) {
+        List<SemanticVersion> result = new ArrayList<SemanticVersion>();
+        
+        if (list != null && !list.isEmpty()) {
+            for (String version : list) {
+                try {
+                    result.add(new SemanticVersion(version));
+                } catch (IllegalArgumentException e) {
+                    if (invalidVersionList != null) {
+                        invalidVersionList.add(version);
+                    }
+                }
+            }
+            
+            sort(result);
+            
+            if (invalidVersionList != null) {
+                Collections.sort(invalidVersionList);
+            }
+        }
+        
+        return result;
+    }
 
+    
     /**
      * Get strict version of the current
      *
