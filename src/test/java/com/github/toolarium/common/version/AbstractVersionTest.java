@@ -73,7 +73,7 @@ public class AbstractVersionTest {
      * @param list the string list
      * @return the parsed list
      */
-    private static List<String> parseVersionList(String list) {
+    protected static List<String> parseVersionList(String list) {
         List<String> result = new ArrayList<String>();
         String[] versionList = list.trim().split(",");
         for (int i = 0; i < versionList.length; i++) {

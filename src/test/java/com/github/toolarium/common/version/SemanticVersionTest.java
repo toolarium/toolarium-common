@@ -566,9 +566,35 @@ public class SemanticVersionTest extends AbstractVersionTest {
         assertEquals("[2.1.0, 2.0.2, 2.0.1, 2.0.0, 1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, 1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
                      + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.11-b, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
                      + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]", SemanticVersion.filter(versionList, 2, 2, 2, true).toString());
-
+        
         Collections.sort(VERSION_LIST_INVALID);
         assertEquals(VERSION_LIST_INVALID.toString(), invalidVersionList.toString());
+    }
+
+    
+    /**
+     * Test filter version
+     */
+    @Test
+    public void testFilterVersionsNewRelease() {
+        List<String> list = getVersionList(true);
+        list.addAll(parseVersionList("3.0.0, 3.0.1, 3.0.2, 3.0.3"));
+        list.addAll(VERSION_LIST_INVALID);
+        Collections.shuffle(list);
+        
+        List<SemanticVersion> versionList = SemanticVersion.convert(list, new ArrayList<String>());
+        Collections.shuffle(versionList);
+        assertEquals("[3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 2, 2, 2, 1, 2, false).toString());
+        
+        //
+        
+        list.addAll(parseVersionList("3.1.0, 3.1.1, 3.1.2"));
+        list.addAll(VERSION_LIST_INVALID);
+        Collections.shuffle(list);
+        
+        versionList = SemanticVersion.convert(list, new ArrayList<String>());
+        Collections.shuffle(versionList);
+        assertEquals("[3.1.2, 3.1.1, 3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 2, 2, 2, 1, 2, false).toString());
     }
 
     
