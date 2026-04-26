@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 
@@ -57,6 +58,45 @@ public class PropertyExpanderTest {
         assertEquals(PropertyExpander.getInstance().expand("my$$test"), "my$$test");
         assertEquals(PropertyExpander.getInstance().expand("my $$ test"), "my $$ test");
         assertEquals(PropertyExpander.getInstance().expand("my${$}test"), "my${$}test");
+    }
+
+
+    /**
+     * Test runWith sets and cleans up properties
+     */
+    @Test
+    public void testRunWith() {
+        Properties prop = new Properties();
+        prop.setProperty("RW_ATTR", "runWith value");
+        AtomicReference<String> captured = new AtomicReference<>();
+
+        PropertyExpanderContextBasedProperties.runWith(prop, () -> {
+            captured.set(PropertyExpander.getInstance().expand("${RW_ATTR}"));
+        });
+
+        assertEquals("runWith value", captured.get());
+        // after runWith, properties should be cleaned up
+        assertNull(PropertyExpanderContextBasedProperties.get());
+    }
+
+
+    /**
+     * Test runWith cleans up even on exception
+     */
+    @Test
+    public void testRunWithCleanupOnException() {
+        Properties prop = new Properties();
+        prop.setProperty("RW_ATTR2", "value");
+
+        try {
+            PropertyExpanderContextBasedProperties.runWith(prop, () -> {
+                throw new RuntimeException("test exception");
+            });
+        } catch (RuntimeException e) {
+            // expected
+        }
+
+        assertNull(PropertyExpanderContextBasedProperties.get());
     }
 
 

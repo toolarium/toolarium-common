@@ -148,6 +148,36 @@ public class StringUtilTest {
 
     
     /**
+     * Test left trim
+     */
+    @Test
+    public void testTrimLeftRight() {
+        String subPath = "my/path";
+        assertEquals(subPath, trimSlash(subPath));
+        assertEquals(subPath, trimSlash("/" + subPath));
+        assertEquals(subPath, trimSlash(subPath + "/"));
+        assertEquals(subPath, trimSlash("/" + subPath + "/"));
+        assertEquals(subPath, trimSlash("/////" + subPath));
+        assertEquals(subPath, trimSlash(subPath + "////"));
+        assertEquals(subPath, trimSlash("/////" + subPath + "////"));
+    }
+
+    /**
+     * Trim slahes
+     *
+     * @param subPath the path
+     * @return the trimmed path
+     */
+    String trimSlash(String subPath) {
+        if (subPath == null) {
+            return null;
+        }
+        
+        return subPath.replaceAll("^/+", "").replaceAll("/+$", "");
+    }
+
+    
+    /**
      * Test 
      */
     @Test

@@ -95,6 +95,8 @@ public class TextUtilTest {
     @Test
     public void testBlockText() {
         assertEquals(" + title: this is my text     ", TextUtil.getInstance().blockText(" + ", TITLE, 7, THIS_IS_MY_TEXT, 20));
+        assertEquals(" - title: this is my text with longer and longer messsage ", TextUtil.getInstance().blockText(" - ", TITLE, 7, THIS_IS_MY_TEXT + " with longer and longer messsage", 48));
+        assertEquals(" - title: this is my text with longer \n          and longer messsage         ", TextUtil.getInstance().blockText(" - ", TITLE, 7, THIS_IS_MY_TEXT + " with longer and longer messsage", 28));
         assertEquals("title:this is my text     ", TextUtil.getInstance().blockText(null, TITLE, 6, THIS_IS_MY_TEXT, 20));
         assertEquals("tthis is my text     ", TextUtil.getInstance().blockText(null, TITLE, 1, THIS_IS_MY_TEXT, 20));
         assertEquals(THIS_IS_MY_TEXT + SPACES5, TextUtil.getInstance().blockText(null, TITLE, 0, THIS_IS_MY_TEXT, 20));
@@ -106,6 +108,17 @@ public class TextUtilTest {
     }
 
 
+    /**
+     * Test block text 2
+     */
+    @Test
+    public void testBlockText2() {
+        String cveList = "CVE-2017-12626, CVE-2016-5000, CVE-2017-5644, CVE-2019-12415, CVE-2022-26336, CVE-2014-9527, CVE-2014-3529, CVE-2014-3574";
+        assertEquals(" - CVE      CVE-2017-12626, CVE-2016-5000, CVE-2017-5644, CVE-2019-12415,           \n" 
+                     + "            CVE-2022-26336, CVE-2014-9527, CVE-2014-3529, CVE-2014-3574             ", 
+                     TextUtil.getInstance().blockText(" - ", "CVE", 9, cveList, 72));
+    }
+    
     /**
      * Test string tokenizer
      */

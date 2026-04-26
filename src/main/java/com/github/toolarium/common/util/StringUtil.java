@@ -23,7 +23,7 @@ public final class StringUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final StringUtil INSTANCE = new StringUtil();
     }
 

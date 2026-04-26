@@ -176,9 +176,17 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
      * @return true if the current version is greater than the provided version
      */
     public boolean isGreaterThan(SemanticVersion version) {
-        if (getMajor() > version.getMajor()) {
+        int thisMajor = 0;
+        if (getMajor() != null) {
+            thisMajor = getMajor();
+        }
+        int otherMajor = 0;
+        if (version.getMajor() != null) {
+            otherMajor = version.getMajor();
+        }
+        if (thisMajor > otherMajor) {
             return true;
-        } else if (getMajor() < version.getMajor()) {
+        } else if (thisMajor < otherMajor) {
             return false;
         }
         if (getType() == VersionType.NPM && version.getMinor() == null) {
@@ -221,7 +229,7 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
         for (int i = 0; i < tokens1.size() && i < tokens2.size(); i++) {
             int cmp;
             try { // trying to resolve the suffix part with an integer
-                cmp = Integer.valueOf(tokens1.get(i)) - Integer.valueOf(tokens2.get(i));
+                cmp = Integer.compare(Integer.parseInt(tokens1.get(i)), Integer.parseInt(tokens2.get(i)));
             } catch (NumberFormatException e) { // else, do a string comparison
                 cmp = tokens1.get(i).compareToIgnoreCase(tokens2.get(i));
             }

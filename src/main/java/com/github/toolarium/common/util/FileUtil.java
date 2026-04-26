@@ -12,9 +12,14 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 
 /**
@@ -27,6 +32,7 @@ public final class FileUtil {
     public static final char BACKSLASH = '\\';
     public static final String SLASH_STR = "/";
     public static final String BACKSLASH_STR = "\\";
+    private final RegularExpressionUtil regexUtil = new RegularExpressionUtil();
 
     
     /**
@@ -34,7 +40,7 @@ public final class FileUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final FileUtil INSTANCE = new FileUtil();
     }
 
@@ -73,39 +79,35 @@ public final class FileUtil {
             return result;
         }
 
+        boolean isAbsolute = result.startsWith(SLASH_STR) || (result.length() >= 2 && result.charAt(1) == ':');
         result = StringUtil.getInstance().trimRight(result.replace(BACKSLASH, SLASH), SLASH);
         List<String> pathList = StringUtil.getInstance().splitAsList(result, SLASH_STR);
 
-        // simplify path
-        String pathElement;
-        int i = 0;
-        while (i >= 0 && i < pathList.size()) {
-            pathElement = pathList.get(i);
-
+        // simplify path using a stack-based approach
+        List<String> resolvedParts = new ArrayList<>();
+        for (String pathElement : pathList) {
             if ("..".equals(pathElement)) {
-                if ((i - 1) >= 0) {
-                    pathList.remove(i - 1);
+                if (!resolvedParts.isEmpty() && !"..".equals(resolvedParts.get(resolvedParts.size() - 1))) {
+                    resolvedParts.remove(resolvedParts.size() - 1);
+                } else if (!isAbsolute) {
+                    // for relative paths, keep leading ".." references
+                    resolvedParts.add(pathElement);
                 }
-
-                if ((i - 1) >= 0) {
-                    pathList.remove(i - 1);
-                }
-                
-                i--;
+                // for absolute paths, silently discard ".." that would escape root
             } else {
-                i++;
+                resolvedParts.add(pathElement);
             }
         }
 
         // put string together
-        result = "";
-        for (String p : pathList) {
-            if (result.length() == 0) {
-                result = p;
-            } else {
-                result += SLASH_STR + p;
+        StringBuilder sb = new StringBuilder();
+        for (String p : resolvedParts) {
+            if (sb.length() > 0) {
+                sb.append(SLASH);
             }
+            sb.append(p);
         }
+        result = sb.toString();
 
         if (path.endsWith(SLASH_STR) && !result.endsWith(SLASH_STR)) {
             result += SLASH_STR;
@@ -276,6 +278,9 @@ public final class FileUtil {
 
         if (dir.isDirectory()) {
             String[] children = dir.list();
+            if (children == null) {
+                return false;
+            }
 
             for (int i = 0; i < children.length; i++) {
                 boolean success = removeDirectory(new File(dir, children[i]));
@@ -388,16 +393,10 @@ public final class FileUtil {
             return "";
         }
 
-        InputStream src = null;
-        try {
+        try (InputStream src = url.openStream()) {
             ByteArrayOutputStream dest = new ByteArrayOutputStream();
-            src = url.openStream();
             ChannelUtil.getInstance().channelCopy(src, dest);
             return dest.toString();
-        } finally {
-            if (src != null) {
-                src.close();
-            }
         }
     }
 
@@ -449,5 +448,80 @@ public final class FileUtil {
      */
     public void writeFileContent(Path file, Charset charset, String content) throws IOException {
         Files.write(file, content.getBytes(charset)); 
+    }
+
+    
+    /**
+     * Search files
+     *
+     * @param rootDir the root path
+     * @param searchContentPattern the search content pattern 
+     * @return the changed files
+     * @throws IOException if an I/O error is thrown by a visitor method
+     * @throws IllegalArgumentException if the search pattern is invalid
+     */
+    public List<Path> searchFiles(Path rootDir, String searchContentPattern) throws IOException {
+        return searchFiles(rootDir, null, searchContentPattern);
+    }
+
+    
+    /**
+     * Search files
+     *
+     * @param rootDir the root path
+     * @param fileExtension the file extension
+     * @param searchContentPattern the search content pattern 
+     * @return the changed files
+     * @throws IOException if an I/O error is thrown by a visitor method
+     * @throws IllegalArgumentException if the search pattern is invalid
+     */
+    public List<Path> searchFiles(Path rootDir, String fileExtension, String searchContentPattern) throws IOException {
+        List<Path> foundFiles = new ArrayList<Path>();
+        Pattern pattern = regexUtil.compile(searchContentPattern);
+        Files.walkFileTree(rootDir, new SimpleFileVisitor<Path>() {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (Files.isRegularFile(file) && (fileExtension == null || fileExtension.isEmpty() || file.getFileName().toString().endsWith(fileExtension))) {
+                    final String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                    if (pattern.matcher(content).find()) {
+                        foundFiles.add(file);
+                    }
+                }
+                
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        
+        return foundFiles;
+    }
+
+
+    /**
+     * Search and replace files
+     *
+     * @param rootDir the root path
+     * @param searchContentPattern the search content pattern 
+     * @param replacement the replacement
+     * @return the changed files
+     * @throws IOException if an I/O error is thrown by a visitor method
+     * @throws IllegalArgumentException if the search pattern is invalid
+     */
+    public List<Path> searchAndReplaceFiles(Path rootDir, String searchContentPattern, String replacement) throws IOException {
+        List<Path> changedFiles = new ArrayList<Path>();
+        Pattern pattern = regexUtil.compile(searchContentPattern);
+        Files.walkFileTree(rootDir, new SimpleFileVisitor<Path>() {
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (Files.isRegularFile(file)) {
+                    final String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+                    final String updatedContent = pattern.matcher(content).replaceAll(replacement);
+                    if (!content.equals(updatedContent)) {
+                        Files.write(file, updatedContent.getBytes(StandardCharsets.UTF_8));
+                        changedFiles.add(file);
+                    }
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        
+        return changedFiles;
     }
 }

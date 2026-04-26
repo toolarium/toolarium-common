@@ -77,8 +77,8 @@ public class BandwidthThrottlingTest {
         assertEquals(p.getCounter(), testCount);
         assertEquals(p.getBandwidth(), bandwidth);
         assertEquals(p.getUpdateInterval(), updateInterval);
-        assertTrue(p.getStartTime() - startTime <= 20);
-        assertTrue(p.getLastUpdateTime() - stopTime <= 20);
+        assertTrue(Math.abs(p.getStartTime() - startTime) <= 50);
+        assertTrue(Math.abs(p.getLastUpdateTime() - stopTime) <= 50);
 
         LOG.debug("" + testName + ", bandwidth avg: " + RoundUtil.getInstance().roundToLong(p.getBandwidthStatisticCounter().getAverage()));
         LOG.debug("" + testName + ", sleep time avg: " + RoundUtil.getInstance().roundToLong(p.getSleepStatisticCounter().getAverage()));

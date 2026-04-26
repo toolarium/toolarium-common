@@ -15,7 +15,7 @@ import java.text.DecimalFormat;
  */
 public abstract class AbstractDifferenceFormatter  {
     /** The internal decimal formatter */
-    private DecimalFormat formatter;
+    private final ThreadLocal<DecimalFormat> formatter;
     
     /** Defines if after a value follows a space */
     private boolean spaceAfterValue = false;
@@ -28,9 +28,12 @@ public abstract class AbstractDifferenceFormatter  {
      * @param spaceAfterValue true to have a space after the value
      */
     public AbstractDifferenceFormatter(String pattern, boolean spaceAfterValue) {
-        formatter = new DecimalFormat(pattern);
-        formatter.setMinimumFractionDigits(0);
-        formatter.setGroupingUsed(false);
+        formatter = ThreadLocal.withInitial(() -> {
+            DecimalFormat df = new DecimalFormat(pattern);
+            df.setMinimumFractionDigits(0);
+            df.setGroupingUsed(false);
+            return df;
+        });
         this.spaceAfterValue = spaceAfterValue;
     }
     
@@ -103,16 +106,16 @@ public abstract class AbstractDifferenceFormatter  {
         }
 
         if (space) {
-            return formatter.format(number) + " " + t;
+            return formatter.get().format(number) + " " + t;
         }
-        
-        return formatter.format(number) + t;
+
+        return formatter.get().format(number) + t;
     }
-    
-    
-    /** 
+
+
+    /**
      * Formats a given number
-     * 
+     *
      * @param number the number to format
      * @param trailer the tailer
      * @param space add space between number and trailer
@@ -124,12 +127,12 @@ public abstract class AbstractDifferenceFormatter  {
         if (trailer != null) {
             t = trailer;
         }
-        
+
         if (space) {
-            return formatter.format(number) + " " + t;
+            return formatter.get().format(number) + " " + t;
         }
-        
-        return formatter.format(number) + t;
+
+        return formatter.get().format(number) + t;
     }
     
     
@@ -163,7 +166,7 @@ public abstract class AbstractDifferenceFormatter  {
      * @return the decimal formatter
      */
     protected DecimalFormat getDecimalFormatter() {
-        return formatter;
+        return formatter.get();
     }
     
     

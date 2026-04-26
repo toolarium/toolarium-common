@@ -5,7 +5,6 @@
  */
 package com.github.toolarium.common.stacktrace;
 
-import com.github.toolarium.common.util.StringUtil;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
-import java.util.Vector;
 import java.util.function.Consumer;
 
 
@@ -61,10 +59,8 @@ public final class StackTrace {
      * @return an array with stack trace elements.
      */
     public static StackTraceElement[] getStackTraceElements() {
-        Throwable stackThrower = new Throwable();
-        StringWriter stringWriter = new StringWriter();
-        stackThrower.printStackTrace(new PrintWriter(stringWriter));  // CHECKSTYLE IGNORE THIS LINE
-        return parseStackTraceElements(stringWriter.toString(), 2, -1);
+        java.lang.StackTraceElement[] javaElements = Thread.currentThread().getStackTrace();
+        return convertStackTraceElements(javaElements, 2, -1);
     }    
 
     
@@ -87,10 +83,8 @@ public final class StackTrace {
      * @return an array with stack trace elements.
      */
     public static StackTraceElement[] getStackTraceElements(int startIndex, int numberOfLastElements) {
-        Throwable stackThrower = new Throwable();
-        StringWriter stringWriter = new StringWriter();
-        stackThrower.printStackTrace(new PrintWriter(stringWriter));  // CHECKSTYLE IGNORE THIS LINE
-        return parseStackTraceElements(stringWriter.toString(), startIndex, numberOfLastElements);
+        java.lang.StackTraceElement[] javaElements = Thread.currentThread().getStackTrace();
+        return convertStackTraceElements(javaElements, startIndex, numberOfLastElements);
     }
 
         
@@ -367,43 +361,43 @@ public final class StackTrace {
      *         </UL>
      */
     public static StackTraceElement[] parseStackTraceElements(String callStack, int startIndex, int traceSize) {
-        Vector<String> stackVector = new Vector<String>(); // vector which holds string lines
+        List<String> stackLines = new ArrayList<String>();
         try (BufferedReader reader = new BufferedReader(new StringReader(callStack))) {
             String line = reader.readLine();
             while (line != null) {
-                stackVector.add(line);
+                stackLines.add(line);
                 line = reader.readLine();
             }
         } catch (IOException exc) {
             // quit
         }
-        
+
         // the size of the stack is now know so the returnString can be initialized
         // first line is always java.lang.Throwable so we will not include that
         // the second line will always be getTraceElements so we will not include
         // that either
         int startTrace = 2;
-        if ((startIndex >= 0) && (startIndex < stackVector.size())) {
+        if ((startIndex >= 0) && (startIndex < stackLines.size())) {
             startTrace = startIndex;
         }
-        
-        int size = stackVector.size();
-        if ((traceSize > 0) && ((traceSize + startTrace + 1) <= stackVector.size())) {
+
+        int size = stackLines.size();
+        if ((traceSize > 0) && ((traceSize + startTrace + 1) <= stackLines.size())) {
             size = traceSize + startTrace + 1;
         }
 
         if (startTrace > size) {
             startTrace = 0;
         }
-        
-        StackTraceElement[] stackTraceElements = new StackTraceElement[ size - startTrace ];
+
+        StackTraceElement[] stackTraceElements = new StackTraceElement[size - startTrace];
 
         // parse each line of the stack trace and put it in the desired format &
         // order remember that we are skipping the first line
         int endTrace = size;
         int pos = startTrace;
         for (int i = startTrace; i < endTrace; i++) {
-            StackTraceElement e = parseStackTraceElement(stackVector.elementAt(i));
+            StackTraceElement e = parseStackTraceElement(stackLines.get(i));
             if (e != null) {
                 stackTraceElements[pos - startTrace] = e;
                 pos++;
@@ -552,16 +546,14 @@ public final class StackTrace {
         returnString[4] = "";
 
         if (packageLength != 0) {
+            StringBuilder packageBuilder = new StringBuilder();
             for (int i = 0; i < packageLength; i++) {
-                returnString[4] += st.nextToken() + ".";
+                if (packageBuilder.length() > 0) {
+                    packageBuilder.append('.');
+                }
+                packageBuilder.append(st.nextToken());
             }
-
-            if (returnString[4].length() > 0) {
-                // strip the last period off the package name
-                returnString[4] = returnString[4].substring(0, returnString[4].length() - 1);
-            } else {
-                returnString[4] = StringUtil.getInstance().trimRight(returnString[4]);
-            }
+            returnString[4] = packageBuilder.toString();
         }
 
         // get the class name
@@ -579,8 +571,41 @@ public final class StackTrace {
 
     
     /**
+     * Convert java stack trace elements to toolarium stack trace elements
+     *
+     * @param javaElements the java stack trace elements
+     * @param startIndex the start index
+     * @param traceSize the trace size (default -1 for all)
+     * @return the converted stack trace elements
+     */
+    private static StackTraceElement[] convertStackTraceElements(java.lang.StackTraceElement[] javaElements, int startIndex, int traceSize) {
+        int start = Math.max(0, startIndex);
+        if (start >= javaElements.length) {
+            return new StackTraceElement[0];
+        }
+
+        int end = javaElements.length;
+        if (traceSize > 0 && (start + traceSize) < end) {
+            end = start + traceSize;
+        }
+
+        StackTraceElement[] result = new StackTraceElement[end - start];
+        for (int i = start; i < end; i++) {
+            java.lang.StackTraceElement je = javaElements[i];
+            String declaringClass = je.getClassName();
+            String moduleName = je.getModuleName();
+            if (moduleName != null && !moduleName.isEmpty()) {
+                declaringClass = moduleName + "/" + declaringClass;
+            }
+            result[i - start] = new StackTraceElement(null, declaringClass, je.getFileName(), je.getMethodName(), je.getLineNumber());
+        }
+        return result;
+    }
+
+
+    /**
      * Check if a given stack trace element should be filtered
-     * 
+     *
      * @param filteredElementNames the filer
      * @param e the element
      * @return true if it should be filtered

@@ -103,11 +103,16 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
 
         // do bandwidth check only if bandwidth
         if ((count % updateInterval) == 0) {
+            long maxWaitTime = 60_000L; // max 60 seconds to prevent infinite spinning
+            long waitStart = System.currentTimeMillis();
             do {
                 currentBandwidth = calculateCurrentBandwidth();
                 if (currentBandwidth > bandwidth) {
                     ThreadUtil.getInstance().sleep(100L);
                     bandwidthStatisticCounter.add(calculateCurrentBandwidth());
+                    if (System.currentTimeMillis() - waitStart > maxWaitTime) {
+                        break;
+                    }
                 } else {
                     bandwidthStatisticCounter.add(currentBandwidth);
                 }

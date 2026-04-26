@@ -9,7 +9,13 @@ import java.lang.reflect.InvocationTargetException;
 
 
 /**
- * 
+ * Utility class for loading classes and creating instances via reflection.
+ *
+ * <p><b>Security Warning:</b> Methods like {@link #newInstance(String)} and {@link #getClassObject(String)}
+ * load and instantiate arbitrary classes by name. If class names originate from untrusted input,
+ * arbitrary code could be executed (e.g. via static initializers). Callers <b>must</b> validate
+ * and/or whitelist class names before passing them to these methods.</p>
+ *
  * @author patrick
  */
 public final class ClassInstanceUtil {
@@ -18,7 +24,7 @@ public final class ClassInstanceUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ClassInstanceUtil INSTANCE = new ClassInstanceUtil();
     }
 

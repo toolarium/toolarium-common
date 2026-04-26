@@ -19,7 +19,7 @@ public final class MapUtil {
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final MapUtil INSTANCE = new MapUtil();
     }
 
@@ -82,14 +82,17 @@ public final class MapUtil {
      * @param map the map to extend
      * @param mapToAdd the added map
      * @return the extended map
+     * @throws IllegalArgumentException if the target map is null
      */
     public <K, V> Map<K, V> add(Map<K, V> map, Map<K, V> mapToAdd) {
-        if (map != null) {
-            if (mapToAdd != null) {
-                map.putAll(mapToAdd);
-            }
+        if (map == null) {
+            throw new IllegalArgumentException("Target map must not be null!");
+        }
+
+        if (mapToAdd != null) {
+            map.putAll(mapToAdd);
         }
 
         return map;
-    }    
+    }
 }

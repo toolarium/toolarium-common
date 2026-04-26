@@ -26,7 +26,7 @@ public final class TextUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final TextUtil INSTANCE = new TextUtil();
     }
 

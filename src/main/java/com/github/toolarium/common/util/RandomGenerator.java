@@ -48,7 +48,7 @@ public final class RandomGenerator {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final RandomGenerator INSTANCE = new RandomGenerator();
     }
 
@@ -423,7 +423,7 @@ public final class RandomGenerator {
                     try {
                         sid = InetAddress.getLocalHost().toString();
                     } catch (UnknownHostException e) {
-                        // NOP
+                        sid = "localhost-" + secureRandom.nextLong();
                     }
                 }
             }

@@ -25,7 +25,7 @@ public final class ReflectionUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ReflectionUtil INSTANCE = new ReflectionUtil();
     }
 

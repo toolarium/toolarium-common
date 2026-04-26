@@ -27,7 +27,7 @@ public final class ChannelUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ChannelUtil INSTANCE = new ChannelUtil();
     }
 
@@ -115,14 +115,16 @@ public final class ChannelUtil {
      * @exception IOException in case of error
      */
     public long channelCopy(InputStream src, OutputStream dest, MessageDigest messageDigest) throws IOException {
-        ReadableByteChannel inChannel = null;
+        ReadableByteChannel inChannel;
         if (messageDigest != null) {
             inChannel = Channels.newChannel(new DigestInputStream(src, messageDigest));
         } else {
             inChannel = Channels.newChannel(src);
         }
 
-        WritableByteChannel outChannel = Channels.newChannel(dest);
-        return channelCopy(inChannel, outChannel);
+        try (ReadableByteChannel in = inChannel;
+             WritableByteChannel outChannel = Channels.newChannel(dest)) {
+            return channelCopy(in, outChannel);
+        }
     }
 }

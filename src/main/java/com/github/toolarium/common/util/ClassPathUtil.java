@@ -39,6 +39,7 @@ public final class ClassPathUtil {
     private final char[] fileSeparators;
     private final Map<String, String> classPaths;
     private final ClassList classes;
+    private final RegularExpressionUtil regexUtil = new RegularExpressionUtil();
     private Map<String, String> jarCache;
     
 
@@ -47,7 +48,7 @@ public final class ClassPathUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ClassPathUtil INSTANCE = new ClassPathUtil();
     }
 
@@ -110,13 +111,14 @@ public final class ClassPathUtil {
      *
      * @param regExp the search regular expression
      * @return a list with full qualified class names or null if it does not exist
+     * @throws IllegalArgumentException if the regex pattern is invalid
      */
     public List<String> searchArchiveByRegExp(String regExp) {
         if (regExp == null || regExp.trim().length() == 0) {
             return null;
         }
 
-        Pattern pattern = Pattern.compile(regExp.trim());
+        Pattern pattern = regexUtil.compile(regExp);
         List<String> resolvedArchoves = new ArrayList<String>();
         for (String name : getClassPaths()) {
             if (pattern.matcher(name).matches()) {
@@ -690,13 +692,14 @@ public final class ClassPathUtil {
          *
          * @param regExp the search regular expression
          * @return a list with full qualified class names
+         * @throws IllegalArgumentException if the regex pattern is invalid
          */
         public List<String> searchClasses(String regExp) {
             if (regExp == null || regExp.trim().length() == 0) {
                 return null;
             }
 
-            Pattern pattern = Pattern.compile(regExp.trim());
+            Pattern pattern = regexUtil.compile(regExp);
             List<String> resolvedClasses = new ArrayList<String>();
             for (String name : list) {
 
@@ -714,13 +717,14 @@ public final class ClassPathUtil {
          *
          * @param regExp the search regular expression
          * @return a list with full qualified class names
+         * @throws IllegalArgumentException if the regex pattern is invalid
          */
         public List<String> searchFiles(String regExp) {
             if (regExp == null || regExp.trim().length() == 0) {
                 return null;
             }
 
-            Pattern pattern = Pattern.compile(regExp.trim());
+            Pattern pattern = regexUtil.compile(regExp);
             List<String> resolvedFiles = new ArrayList<String>();
 
             for (String name : fileList) {
@@ -738,13 +742,14 @@ public final class ClassPathUtil {
          *
          * @param regExp the search regular expression
          * @return a list with full qualified class names
+         * @throws IllegalArgumentException if the regex pattern is invalid
          */
         public List<URL> searchFilesAsURL(String regExp) {
             if (regExp == null || regExp.trim().length() == 0) {
                 return null;
             }
 
-            Pattern pattern = Pattern.compile(regExp.trim());
+            Pattern pattern = regexUtil.compile(regExp);
             List<URL> resolvedFiles = new ArrayList<URL>();
 
             for (String name : fileList) {

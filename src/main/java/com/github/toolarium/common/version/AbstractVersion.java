@@ -128,7 +128,7 @@ public abstract class AbstractVersion<T> {
      * @return the version list
      */
     public static <T extends AbstractVersion<T>> List<T> filter(List<T> list) {
-        return filter(list, 1, 2, 2, 1, 1, false);
+        return internalFilter(list, 0, 1, 2, 2, 1, 1, false);
     }
 
     
@@ -137,11 +137,44 @@ public abstract class AbstractVersion<T> {
      *
      * @param <T> the generic type
      * @param list the list of versions to filter
-     * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
+     * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
+     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param minorThreshold the minor threshold, the number of minor element to keep
+     * @param patchThreshold the patch threshold, the number of patch element to keep
      * @return the version list
      */
-    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, boolean invertFilter) {
-        return filter(list, 1, 2, 2, 1, 1, invertFilter);
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorMinorMaxCount, int majorThreshold, int minorThreshold, int patchThreshold) {
+        return internalFilter(list, majorMinorMaxCount, majorThreshold, minorThreshold, patchThreshold, minorThreshold, patchThreshold, false);
+    }
+
+    
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
+     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param minorThreshold the minor threshold, the number of minor element to keep
+     * @param patchThreshold the patch threshold, the number of patch element to keep
+     * @param previousMajorMinorThreshold the minor version number threshold of previous major version
+     * @param previousMajorPatchThreshold the patch version number threshold of previous major version
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorMinorMaxCount, int majorThreshold, int minorThreshold, int patchThreshold, int previousMajorMinorThreshold, int previousMajorPatchThreshold) {
+        return internalFilter(list, majorMinorMaxCount, majorThreshold, minorThreshold, patchThreshold, previousMajorMinorThreshold, previousMajorPatchThreshold, false);
+    }
+
+    
+    /**
+     * Inverted filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> invertFilter(List<T> list) {
+        return internalFilter(list, 0, 1, 2, 2, 1, 1, true);
     }
 
     
@@ -153,11 +186,10 @@ public abstract class AbstractVersion<T> {
      * @param majorThreshold the major threshold, the number of major element to keep
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
-     * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
      * @return the version list
      */
-    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold, boolean invertFilter) {
-        return filter(list, majorThreshold, minorThreshold, patchThreshold, minorThreshold, patchThreshold, invertFilter);
+    public static <T extends AbstractVersion<T>> List<T> invertFilter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold) {
+        return internalFilter(list, 0, majorThreshold, minorThreshold, patchThreshold, minorThreshold, patchThreshold, true);
     }
 
     
@@ -171,10 +203,35 @@ public abstract class AbstractVersion<T> {
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @param previousMajorMinorThreshold the minor version number threshold of previous major version
      * @param previousMajorPatchThreshold the patch version number threshold of previous major version
+     * @return the version list
+     */
+    public static <T extends AbstractVersion<T>> List<T> invertFilter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold, int previousMajorMinorThreshold, int previousMajorPatchThreshold) {
+        return internalFilter(list, 0, majorThreshold, minorThreshold, patchThreshold, previousMajorMinorThreshold, previousMajorPatchThreshold, true);
+    }
+
+
+    /**
+     * Filter a list of versions
+     *
+     * @param <T> the generic type
+     * @param list the list of versions to filter
+     * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
+     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param minorThreshold the minor threshold, the number of minor element to keep
+     * @param patchThreshold the patch threshold, the number of patch element to keep
+     * @param previousMajorMinorThreshold the minor version number threshold of previous major version
+     * @param previousMajorPatchThreshold the patch version number threshold of previous major version
      * @param invertFilter In case invert filter is set to true then the filtered version are that one which should be ignored 
      * @return the version list
      */
-    public static <T extends AbstractVersion<T>> List<T> filter(List<T> list, int majorThreshold, int minorThreshold, int patchThreshold, int previousMajorMinorThreshold, int previousMajorPatchThreshold, boolean invertFilter) {
+    private static <T extends AbstractVersion<T>> List<T> internalFilter(List<T> list, 
+                                                                         int majorMinorMaxCount, 
+                                                                         int majorThreshold, 
+                                                                         int minorThreshold, 
+                                                                         int patchThreshold, 
+                                                                         int previousMajorMinorThreshold, 
+                                                                         int previousMajorPatchThreshold, 
+                                                                         boolean invertFilter) {
         List<T> filteredVersions = new ArrayList<T>();
         int majorVersionCount = 0;
         int minorVersionCount = 0;
@@ -182,12 +239,14 @@ public abstract class AbstractVersion<T> {
         int previousMajor = -1;
         int previousMinor = -1;
         //int previousPatch = -1;
-        
-        Collections.sort(list, Collections.reverseOrder());
-        
+        int majorMinorCount = 0;
+
+        List<T> sorted = new ArrayList<T>(list);
+        Collections.sort(sorted, Collections.reverseOrder());
+
         int currentMinorThreshold = minorThreshold;
         int currentPatchThreshold = patchThreshold;
-        for (T version : list) {
+        for (T version : sorted) {
             if (previousMajor >= 0) {
                 if (previousMajor == version.getMajorNumber()) {
                     if (previousMinor >= 0) {
@@ -208,6 +267,7 @@ public abstract class AbstractVersion<T> {
                             if (currentMinorThreshold > minorVersionCount) {
                                 previousMinor = version.getMinorNumber();
                                 minorVersionCount++;
+                                majorMinorCount++;
                                 patchVersionCount = 1;
                                 
                                 if (!invertFilter) {
@@ -222,6 +282,7 @@ public abstract class AbstractVersion<T> {
                     } else {
                         previousMinor = version.getMinorNumber();
                         minorVersionCount++;
+                        majorMinorCount++;
                         //previousPatch = version.getPatchNumber();
                         patchVersionCount = 1;
                         
@@ -233,6 +294,7 @@ public abstract class AbstractVersion<T> {
                     if (majorThreshold > majorVersionCount) {
                         previousMajor = version.getMajorNumber();
                         majorVersionCount++;
+                        majorMinorCount++;                        
                         previousMinor = version.getMinorNumber();
                         //previousPatch = version.getPatchNumber();
 
@@ -253,7 +315,8 @@ public abstract class AbstractVersion<T> {
             } else {
                 
                 previousMajor = version.getMajorNumber();
-                majorVersionCount++;
+                majorVersionCount++;   
+                majorMinorCount++;                
                 previousMinor = version.getMinorNumber();
                 minorVersionCount = 1;
                 //previousPatch = version.getPatchNumber();
@@ -269,6 +332,13 @@ public abstract class AbstractVersion<T> {
             if (majorVersionCount > 1) {
                 currentMinorThreshold = previousMajorMinorThreshold;
                 currentPatchThreshold = previousMajorPatchThreshold;
+            }
+            
+            if (!invertFilter && majorMinorMaxCount > 0 && majorMinorCount > 0 && majorMinorCount > majorMinorMaxCount) {
+                if (!filteredVersions.isEmpty()) {
+                    filteredVersions.remove(filteredVersions.size() - 1);
+                }
+                break;
             }
         }        
         

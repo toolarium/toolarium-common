@@ -7,6 +7,8 @@ package com.github.toolarium.common.util;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -66,7 +68,7 @@ public final class ExceptionWrapper {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ExceptionWrapper INSTANCE = new ExceptionWrapper();
     }
 
@@ -204,6 +206,11 @@ public final class ExceptionWrapper {
      * @version $Revision: 1.9 $
      */
     public class DefaultExceptionHandler implements ExceptionHandler {
+        private static final String MSG_THROWABLE = "msg+throwable";
+        private static final String MSG_ONLY = "msg";
+        private static final String THROWABLE_ONLY = "throwable";
+        private static final String NO_ARG = "noarg";
+        private final ConcurrentMap<String, Constructor<?>> constructorCache = new ConcurrentHashMap<>();
 
         /**
          * @see com.github.toolarium.common.util.ExceptionWrapper.ExceptionHandler#createExceptionInstance(java.lang.Throwable, java.lang.Class)
@@ -212,106 +219,109 @@ public final class ExceptionWrapper {
         public <T extends Throwable> T createExceptionInstance(Throwable t, Class<T> newExceptionClazz)
                 throws InstantiationException, IllegalAccessException, InvocationTargetException {
             T newEx = null;
-            
+
             // try to get the message constructor
-            Constructor<T> ct = getMessageAndThrowableConstructor(newExceptionClazz);
+            Constructor<T> ct = getCachedConstructor(newExceptionClazz, MSG_THROWABLE);
             if (ct == null) {
-                Constructor<T> ctm = getMessageConstructor(newExceptionClazz);
-                Constructor<T> ctt = getThrowableConstructor(newExceptionClazz);
+                Constructor<T> ctm = getCachedConstructor(newExceptionClazz, MSG_ONLY);
+                Constructor<T> ctt = getCachedConstructor(newExceptionClazz, THROWABLE_ONLY);
 
                 if (ctm != null) {
-                    // create class with constructor
-                    Object[] args = new Object[1];
-                    args[0] = t.getMessage();
-                    newEx = ctm.newInstance(args);
+                    newEx = ctm.newInstance(t.getMessage());
                 } else if (ctt != null) {
-                    // create class with constructor
-                    Object[] args = new Object[1];
-                    args[0] = t.getCause();
-                    newEx = ctt.newInstance(args);
+                    newEx = ctt.newInstance(t.getCause());
                 }
             } else {
-                // create class with constructor
-                Object[] args = new Object[2];
-                args[0] = t.getMessage();
-                args[1] = t.getCause();
-                newEx = ct.newInstance(args);
+                newEx = ct.newInstance(t.getMessage(), t.getCause());
             }
-            
+
             if (newEx == null) {
                 // create the new class
                 newEx = ClassInstanceUtil.getInstance().newInstance(newExceptionClazz);
             }
-    
+
             // set the stack trace properly
             newEx.setStackTrace(t.getStackTrace());
             return newEx;
         }
-        
-        
+
+
         /**
-         * Gets the default message constructor if is any is defined 
-         * 
+         * Gets a cached constructor for the given exception class and type
+         *
          * @param <T> the generic type
-         * @param newExceptionClazz the current class
-         * @return the constructor or null if no constructor was found
+         * @param clazz the exception class
+         * @param type the constructor type key
+         * @return the constructor or null
          */
-        protected <T> Constructor<T> getMessageConstructor(Class<T> newExceptionClazz) {
-            try {
-                return newExceptionClazz.getConstructor(String.class);
-            } catch (Exception e) {
-                return null;
+        @SuppressWarnings("unchecked")
+        protected <T> Constructor<T> getCachedConstructor(Class<T> clazz, String type) {
+            String key = clazz.getName() + "#" + type;
+            Constructor<?> cached = constructorCache.get(key);
+            if (cached != null) {
+                return (Constructor<T>) cached;
             }
-        }    
-        
-        
+
+            Constructor<T> result = lookupConstructor(clazz, type);
+            if (result != null) {
+                constructorCache.put(key, result);
+            }
+            return result;
+        }
+
+
         /**
-         * Gets the default throwable constructor if is any is defined
-         *  
+         * Looks up a constructor by type
+         *
          * @param <T> the generic type
-         * @param newExceptionClazz the current class
-         * @return the constructor or null if no constructor was found
+         * @param clazz the exception class
+         * @param type the constructor type
+         * @return the constructor or null
          */
-        protected <T> Constructor<T> getThrowableConstructor(Class<T> newExceptionClazz) {
-            try {
-                return newExceptionClazz.getConstructor(Throwable.class);
-            } catch (Exception e) {
-                return null;
+        private <T> Constructor<T> lookupConstructor(Class<T> clazz, String type) {
+            switch (type) {
+                case MSG_ONLY:
+                    try {
+                        return clazz.getConstructor(String.class);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                case THROWABLE_ONLY:
+                    try {
+                        return clazz.getConstructor(Throwable.class);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                case MSG_THROWABLE:
+                    return getMessageAndThrowableConstructor(clazz);
+                default:
+                    return null;
             }
         }
 
-        
+
         /**
-         * Gets the default throwable constructor if is any is defined 
-         * 
+         * Gets the message+throwable constructor if any is defined
+         *
          * @param <T> the generic type
          * @param newExceptionClazz the current class
          * @return the constructor or null if no constructor was found
          */
         protected <T> Constructor<T> getMessageAndThrowableConstructor(Class<T> newExceptionClazz) {
             try {
-                Class<?>[] param = new Class<?>[2];
-                param[0] = String.class;
-                param[1] = Throwable.class;
-                return newExceptionClazz.getConstructor(param);
+                return newExceptionClazz.getConstructor(String.class, Throwable.class);
             } catch (Exception e) {
                 // NOP
             }
-        
+
             try {
-                Class<?>[] param = new Class<?>[2];
-                param[0] = String.class;
-                param[1] = Exception.class;
-                return newExceptionClazz.getConstructor(param);
+                return newExceptionClazz.getConstructor(String.class, Exception.class);
             } catch (Exception e) {
                 // NOP
             }
-        
+
             try {
-                Class<?>[] param = new Class<?>[2];
-                param[0] = String.class;
-                param[1] = RuntimeException.class;
-                return newExceptionClazz.getConstructor(param);
+                return newExceptionClazz.getConstructor(String.class, RuntimeException.class);
             } catch (Exception e) {
                 // NOP
                 return null;

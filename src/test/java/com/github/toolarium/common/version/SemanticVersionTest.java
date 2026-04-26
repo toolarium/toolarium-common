@@ -9,12 +9,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -23,6 +28,10 @@ import org.junit.jupiter.api.Test;
  * @author patrick
  */
 public class SemanticVersionTest extends AbstractVersionTest {
+    private static final Logger LOG = LoggerFactory.getLogger(SemanticVersionTest.class);
+    private static final String T1 = "1";
+    private static final String T2 = "2";
+    private static final String T3 = "3";
     private static final String V1_0_0 = "1.0.0";
     private static final String V1_0_0_ALPHA_1 = "1.0.0-alpha.1";
     private static final String V1_0_0_ALPHA_BETA = "1.0.0-alpha.beta";
@@ -543,34 +552,35 @@ public class SemanticVersionTest extends AbstractVersionTest {
         List<SemanticVersion> versionList = SemanticVersion.convert(list, invalidVersionList);
         Collections.shuffle(versionList);
 
-        assertEquals("[]", SemanticVersion.filter(versionList, 0, 0, 0, false).toString());
-        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 0, 0, false).toString());
-        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 1, 0, false).toString());
-        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 1, 1, false).toString());
-        assertEquals("[2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 1, 1, 2, false).toString());
-        assertEquals("[2.2.1, 2.1.2]", SemanticVersion.filter(versionList, 1, 2, 1, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1]", SemanticVersion.filter(versionList, 1, 2, 2, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0]", SemanticVersion.filter(versionList, 1, 2, 3, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.2, 2.0.1, 2.0.0]", SemanticVersion.filter(versionList, 1, 3, 3, false).toString());
+        final String firstVerison = "[2.2.1]";
+        assertEquals("[]", SemanticVersion.filter(versionList, 0, 0, 0, 0).toString());
+        assertEquals(firstVerison, SemanticVersion.filter(versionList, 0, 1, 0, 0).toString());
+        assertEquals(firstVerison, SemanticVersion.filter(versionList, 0, 1, 1, 0).toString());
+        assertEquals(firstVerison, SemanticVersion.filter(versionList, 0, 1, 1, 1).toString());
+        assertEquals("[2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 0, 1, 1, 2).toString());
+        assertEquals("[2.2.1, 2.1.2]", SemanticVersion.filter(versionList, 0, 1, 2, 1).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1]", SemanticVersion.filter(versionList, 0, 1, 2, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0]", SemanticVersion.filter(versionList, 0, 1, 2, 3).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.2, 2.0.1, 2.0.0]", SemanticVersion.filter(versionList, 0, 1, 3, 3).toString());
         
         // test previous major settings
-        assertEquals("[2.2.1, 1.3.4]", SemanticVersion.filter(versionList, 2, 1, 1, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 1.3.4]", SemanticVersion.filter(versionList, 2, 1, 2, 1, 1, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3]", SemanticVersion.filter(versionList, 2, 1, 2, 1, 2, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.2.4]", SemanticVersion.filter(versionList, 2, 1, 2, 2, 1, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 1, 2, 2, 2, false).toString());
+        assertEquals("[2.2.1, 1.3.4]", SemanticVersion.filter(versionList, 0, 2, 1, 1).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4]", SemanticVersion.filter(versionList, 0, 2, 1, 2, 1, 1).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3]", SemanticVersion.filter(versionList, 0, 2, 1, 2, 1, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.2.4]", SemanticVersion.filter(versionList, 0, 2, 1, 2, 2, 1).toString());
+        assertEquals("[2.2.1, 2.2.0, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 0, 2, 1, 2, 2, 2).toString());
         
         // same test cases
-        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 2, 2, false).toString());
-        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 2, 2, 2, 2, 2, false).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 0, 2, 2, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 0, 2, 2, 2, 2, 2).toString());
         assertEquals("[2.1.0, 2.0.2, 2.0.1, 2.0.0, 1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, 1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
                      + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.11-b, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
-                     + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]", SemanticVersion.filter(versionList, 2, 2, 2, true).toString());
+                     + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]", SemanticVersion.invertFilter(versionList, 2, 2, 2).toString());
         
         Collections.sort(VERSION_LIST_INVALID);
         assertEquals(VERSION_LIST_INVALID.toString(), invalidVersionList.toString());
     }
-
+    
     
     /**
      * Test filter version
@@ -584,7 +594,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         
         List<SemanticVersion> versionList = SemanticVersion.convert(list, new ArrayList<String>());
         Collections.shuffle(versionList);
-        assertEquals("[3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 2, 2, 2, 1, 2, false).toString());
+        assertEquals("[3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 0, 2, 2, 2, 1, 2).toString());
         
         //
         
@@ -594,7 +604,45 @@ public class SemanticVersionTest extends AbstractVersionTest {
         
         versionList = SemanticVersion.convert(list, new ArrayList<String>());
         Collections.shuffle(versionList);
-        assertEquals("[3.1.2, 3.1.1, 3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 2, 2, 2, 1, 2, false).toString());
+        assertEquals("[3.1.2, 3.1.1, 3.0.3, 3.0.2, 2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 0, 2, 2, 2, 1, 2).toString());
+    }
+
+    
+    /**
+     * Test filter version
+     */
+    @Test
+    public void testFilterMaxVersions() {
+        List<String> list = getVersionList(true);
+        list.addAll(VERSION_LIST_INVALID);
+        Collections.shuffle(list);
+        
+        List<String> invalidVersionList = new ArrayList<String>();
+        List<SemanticVersion> versionList = SemanticVersion.convert(list, invalidVersionList);
+        Collections.shuffle(versionList);
+
+        // same test cases
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 0, 1, 0, 0).toString());
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 1, 0, 0).toString());
+        
+        assertEquals("[2.2.1, 2.1.2, 1.3.4, 1.2.4]", SemanticVersion.filter(versionList, 0, 2, 2, 0).toString());
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 2, 2, 0).toString());
+        
+        assertEquals("[2.2.1]", SemanticVersion.filter(versionList, 1, 2, 2, 1).toString());
+        assertEquals("[2.2.1, 2.2.0]", SemanticVersion.filter(versionList, 1, 2, 2, 2).toString());
+
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1]", SemanticVersion.filter(versionList, 2, 2, 2, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3]", SemanticVersion.filter(versionList, 3, 2, 2, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 4, 2, 2, 2).toString());
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3]", SemanticVersion.filter(versionList, 4, 2, 2, 2, 2, 2).toString());
+
+        assertEquals("[2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3]", SemanticVersion.filter(versionList, 3, 2, 2, 2).toString());
+        assertEquals("[2.1.0, 2.0.2, 2.0.1, 2.0.0, 1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, 1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
+                     + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, 0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.11-b, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
+                     + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]", SemanticVersion.invertFilter(versionList, 2, 2, 2).toString());
+        
+        Collections.sort(VERSION_LIST_INVALID);
+        assertEquals(VERSION_LIST_INVALID.toString(), invalidVersionList.toString());
     }
 
     
@@ -619,5 +667,319 @@ public class SemanticVersionTest extends AbstractVersionTest {
             assertEquals(suffixTokens[i], version.getSuffixTokens().get(i));
         }
         assertEquals(build, version.getBuild());
+    }
+
+
+    /**
+     * Test that filter does not mutate the input list
+     */
+    @Test
+    public void testFilterDoesNotMutateInputList() {
+        List<SemanticVersion> input = new ArrayList<>();
+        input.add(new SemanticVersion("1.0.0"));
+        input.add(new SemanticVersion("2.0.0"));
+        input.add(new SemanticVersion("0.5.0"));
+
+        List<SemanticVersion> copy = new ArrayList<>(input);
+        SemanticVersion.filter(input, 0, 1, 1, 1);
+
+        assertEquals(copy.size(), input.size());
+        for (int i = 0; i < copy.size(); i++) {
+            assertEquals(copy.get(i).toString(), input.get(i).toString());
+        }
+    }
+
+
+    /**
+     * Test isGreaterThan with equal major versions
+     */
+    @Test
+    public void testIsGreaterThanEqualMajor() {
+        SemanticVersion v1 = new SemanticVersion("1.0.0");
+        SemanticVersion v2 = new SemanticVersion("1.0.0");
+        assertFalse(v1.isGreaterThan(v2));
+        assertFalse(v2.isGreaterThan(v1));
+
+        SemanticVersion v3 = new SemanticVersion("2.0.0");
+        assertTrue(v3.isGreaterThan(v1));
+        assertFalse(v1.isGreaterThan(v3));
+    }
+
+
+    /**
+     * Test that SemanticVersion.filter and .invertFilter produce the exact same results
+     * as the cb-version-filter CLI tool. Each test case was validated against the CLI output.
+     *
+     * <p>Note: Java's filter(list, majorMinorMax, major, minor, patch) passes minor/patch
+     * as previousMajorMinor/PatchThreshold too. When comparing with the CLI, explicit
+     * --previousMajorMinorThreshold and --previousMajorPatchThreshold must be set to match.
+     */
+    @Test
+    public void testFilterMatchesCbVersionFilterCli() {
+        List<SemanticVersion> versionList = createCliVersionList();
+
+        // cb-version-filter --majorThreshold 1 --minorThreshold 1 --patchThreshold 1
+        //   --previousMajorMinorThreshold 1 --previousMajorPatchThreshold 1
+        assertFilterResult(versionList, 0, 1, 1, 1,
+                "2.2.1");
+
+        // cb-version-filter --majorThreshold 1 --minorThreshold 3 --patchThreshold 3
+        //   --previousMajorMinorThreshold 3 --previousMajorPatchThreshold 3
+        assertFilterResult(versionList, 0, 1, 3, 3,
+                "2.2.1, 2.2.0, 2.1.2, 2.1.1, 2.1.0, 2.0.2, 2.0.1, 2.0.0");
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 1 --patchThreshold 1
+        //   --previousMajorMinorThreshold 1 --previousMajorPatchThreshold 1
+        assertFilterResult(versionList, 0, 2, 1, 1,
+                "2.2.1, 1.3.4");
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        assertFilterResult(versionList, 0, 2, 2, 2,
+                "2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3, 1.2.4, 1.2.3");
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 1 --patchThreshold 2
+        //   --previousMajorMinorThreshold 1 --previousMajorPatchThreshold 1
+        assertFilterResult(versionList, 0, 2, 1, 2, 1, 1,
+                "2.2.1, 2.2.0, 1.3.4");
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 1 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        assertFilterResult(versionList, 0, 2, 1, 2, 2, 2,
+                "2.2.1, 2.2.0, 1.3.4, 1.3.3, 1.2.4, 1.2.3");
+
+        // cb-version-filter --majorMinorMax 1 --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        assertFilterResult(versionList, 1, 2, 2, 2,
+                "2.2.1, 2.2.0");
+
+        // cb-version-filter --majorMinorMax 2 --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        assertFilterResult(versionList, 2, 2, 2, 2,
+                "2.2.1, 2.2.0, 2.1.2, 2.1.1");
+
+        // cb-version-filter --majorMinorMax 3 --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        assertFilterResult(versionList, 3, 2, 2, 2,
+                "2.2.1, 2.2.0, 2.1.2, 2.1.1, 1.3.4, 1.3.3");
+    }
+
+
+    /**
+     * Test that SemanticVersion.invertFilter produces the exact same results
+     * as cb-version-filter --invertFilter. Each test case was validated against the CLI output.
+     */
+    @Test
+    public void testInvertFilterMatchesCbVersionFilterCli() {
+        List<SemanticVersion> versionList = createCliVersionList();
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2 --invertFilter
+        assertEquals("[2.1.0, 2.0.2, 2.0.1, 2.0.0, "
+                        + "1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, "
+                        + "1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
+                        + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, "
+                        + "0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
+                        + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]",
+                SemanticVersion.invertFilter(versionList, 2, 2, 2).toString());
+
+        // cb-version-filter --majorThreshold 2 --minorThreshold 1 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2 --invertFilter
+        assertEquals("[2.1.2, 2.1.1, 2.1.0, 2.0.2, 2.0.1, 2.0.0, "
+                        + "1.3.2, 1.3.1, 1.3.0, 1.2.2, 1.2.1, 1.2.0, "
+                        + "1.1.4, 1.1.3, 1.1.2, 1.1.1, 1.1.0, 1.0.3, 1.0.2, 1.0.1, 1.0.0, "
+                        + "0.7.3, 0.7.2, 0.7.1, 0.7.0, 0.6.3, 0.6.2, 0.6.1, 0.6.0, "
+                        + "0.5.33, 0.5.2, 0.5.1, 0.5.0, 0.4.11, 0.4.5, 0.4.2, 0.4.1, 0.4.0, "
+                        + "0.1.5, 0.1.4, 0.1.3, 0.1.2, 0.1.1, 0.1.0, 0.0.6, 0.0.5, 0.0.4, 0.0.3, 0.0.2]",
+                SemanticVersion.invertFilter(versionList, 2, 1, 2, 2, 2).toString());
+    }
+
+
+    /**
+     * Test filter and invertFilter by executing cb-version-filter on the command line
+     * and comparing the output. Skipped if cb-version-filter is not available.
+     */
+    @Test
+    public void testFilterAgainstLiveCbVersionFilter() {
+        if (!isCbVersionFilterAvailable()) {
+            LOG.info("cb-version-filter not available on PATH, skipping live CLI comparison test.");
+            return;
+        }
+
+        String versions = createCliVersionInput();
+        List<SemanticVersion> versionList = createCliVersionList();
+
+        // filter: --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        String cliResult = runCbVersionFilter(versions,
+                "--majorThreshold", T2, "--minorThreshold", T2, "--patchThreshold", T2,
+                "--previousMajorMinorThreshold", T2, "--previousMajorPatchThreshold", T2);
+        String javaResult = toSpaceSeparated(SemanticVersion.filter(versionList, 0, 2, 2, 2));
+        assertEquals(cliResult, javaResult);
+
+        // filter: --majorThreshold 2 --minorThreshold 1 --patchThreshold 2
+        //   --previousMajorMinorThreshold 1 --previousMajorPatchThreshold 1
+        cliResult = runCbVersionFilter(versions,
+                "--majorThreshold", T2, "--minorThreshold", T1, "--patchThreshold", T2,
+                "--previousMajorMinorThreshold", T1, "--previousMajorPatchThreshold", T1);
+        javaResult = toSpaceSeparated(SemanticVersion.filter(versionList, 0, 2, 1, 2, 1, 1));
+        assertEquals(cliResult, javaResult);
+
+        // filter: --majorMinorMax 3 --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2
+        cliResult = runCbVersionFilter(versions,
+                "--majorMinorMax", T3, "--majorThreshold", T2, "--minorThreshold", T2, "--patchThreshold", T2,
+                "--previousMajorMinorThreshold", T2, "--previousMajorPatchThreshold", T2);
+        javaResult = toSpaceSeparated(SemanticVersion.filter(versionList, 3, 2, 2, 2));
+        assertEquals(cliResult, javaResult);
+
+        // invertFilter: --majorThreshold 2 --minorThreshold 2 --patchThreshold 2
+        //   --previousMajorMinorThreshold 2 --previousMajorPatchThreshold 2 --invertFilter
+        cliResult = runCbVersionFilter(versions,
+                "--majorThreshold", T2, "--minorThreshold", T2, "--patchThreshold", T2,
+                "--previousMajorMinorThreshold", T2, "--previousMajorPatchThreshold", T2, "--invertFilter");
+        javaResult = toSpaceSeparated(SemanticVersion.invertFilter(versionList, 2, 2, 2));
+        assertEquals(cliResult, javaResult);
+
+        // filter: --majorThreshold 1 --minorThreshold 1 --patchThreshold 1
+        //   --previousMajorMinorThreshold 1 --previousMajorPatchThreshold 1
+        cliResult = runCbVersionFilter(versions,
+                "--majorThreshold", T1, "--minorThreshold", T1, "--patchThreshold", T1,
+                "--previousMajorMinorThreshold", T1, "--previousMajorPatchThreshold", T1);
+        javaResult = toSpaceSeparated(SemanticVersion.filter(versionList, 0, 1, 1, 1));
+        assertEquals(cliResult, javaResult);
+    }
+
+
+    /**
+     * Check if cb-version-filter is available on the PATH
+     *
+     * @return true if available
+     */
+    private boolean isCbVersionFilterAvailable() {
+        try {
+            Process process = new ProcessBuilder("cb-version-filter", "--help")
+                    .redirectErrorStream(true).start();
+            process.getInputStream().readAllBytes();
+            return process.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
+    /**
+     * Create the space-separated version input string for the CLI
+     *
+     * @return the version input
+     */
+    private String createCliVersionInput() {
+        return "2.2.1 2.2.0 2.1.2 2.1.1 2.1.0 2.0.2 2.0.1 2.0.0 "
+                + "1.3.4 1.3.3 1.3.2 1.3.1 1.3.0 1.2.4 1.2.3 1.2.2 1.2.1 1.2.0 "
+                + "1.1.4 1.1.3 1.1.2 1.1.1 1.1.0 1.0.3 1.0.2 1.0.1 1.0.0 "
+                + "0.7.3 0.7.2 0.7.1 0.7.0 0.6.3 0.6.2 0.6.1 0.6.0 "
+                + "0.5.33 0.5.2 0.5.1 0.5.0 0.4.11 0.4.5 0.4.2 0.4.1 0.4.0 "
+                + "0.1.5 0.1.4 0.1.3 0.1.2 0.1.1 0.1.0 0.0.6 0.0.5 0.0.4 0.0.3 0.0.2";
+    }
+
+
+    /**
+     * Run cb-version-filter with the given arguments and return the output as a space-separated string
+     *
+     * @param input the version input to pipe
+     * @param args the CLI arguments
+     * @return the output versions as space-separated string
+     * @throws RuntimeException if cb-version-filter execution fails
+     */
+    private String runCbVersionFilter(String input, String... args) {
+        try {
+            List<String> command = new ArrayList<>();
+            command.add("bash");
+            command.add("-c");
+
+            StringBuilder cmd = new StringBuilder("echo '");
+            cmd.append(input).append("' | cb-version-filter");
+            for (String arg : args) {
+                cmd.append(' ').append(arg);
+            }
+            command.add(cmd.toString());
+
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            String output;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                output = reader.lines()
+                        .filter(line -> !line.trim().isEmpty())
+                        .collect(Collectors.joining(" "));
+            }
+            process.waitFor();
+            return output.trim();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to run cb-version-filter: " + e.getMessage(), e);
+        }
+    }
+
+
+    /**
+     * Convert a version list to space-separated string (matching CLI output format)
+     *
+     * @param versions the version list
+     * @return space-separated version string
+     */
+    private String toSpaceSeparated(List<SemanticVersion> versions) {
+        return versions.stream().map(SemanticVersion::toString).collect(Collectors.joining(" "));
+    }
+
+
+    /**
+     * Create the version list used for CLI comparison tests
+     *
+     * @return the version list
+     */
+    private List<SemanticVersion> createCliVersionList() {
+        return SemanticVersion.convert(Arrays.asList(
+                "2.2.1", "2.2.0", "2.1.2", "2.1.1", "2.1.0", "2.0.2", "2.0.1", "2.0.0",
+                "1.3.4", "1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0",
+                "1.1.4", "1.1.3", "1.1.2", "1.1.1", "1.1.0", "1.0.3", "1.0.2", "1.0.1", "1.0.0",
+                "0.7.3", "0.7.2", "0.7.1", "0.7.0", "0.6.3", "0.6.2", "0.6.1", "0.6.0",
+                "0.5.33", "0.5.2", "0.5.1", "0.5.0", "0.4.11", "0.4.5", "0.4.2", "0.4.1", "0.4.0",
+                "0.1.5", "0.1.4", "0.1.3", "0.1.2", "0.1.1", "0.1.0", "0.0.6", "0.0.5", "0.0.4", "0.0.3", "0.0.2"),
+                null);
+    }
+
+
+    /**
+     * Assert filter result with 4-param filter (previousMajor thresholds default to minor/patch)
+     *
+     * @param versionList the version list
+     * @param majorMinorMax the major minor max
+     * @param majorThreshold the major threshold
+     * @param minorThreshold the minor threshold
+     * @param patchThreshold the patch threshold
+     * @param expected the expected comma-separated version string
+     */
+    private void assertFilterResult(List<SemanticVersion> versionList, int majorMinorMax,
+                                    int majorThreshold, int minorThreshold, int patchThreshold, String expected) {
+        assertEquals("[" + expected + "]",
+                SemanticVersion.filter(versionList, majorMinorMax, majorThreshold, minorThreshold, patchThreshold).toString());
+    }
+
+
+    /**
+     * Assert filter result with 6-param filter (explicit previousMajor thresholds)
+     *
+     * @param versionList the version list
+     * @param majorMinorMax the major minor max
+     * @param majorThreshold the major threshold
+     * @param minorThreshold the minor threshold
+     * @param patchThreshold the patch threshold
+     * @param prevMinor the previous major minor threshold
+     * @param prevPatch the previous major patch threshold
+     * @param expected the expected comma-separated version string
+     */
+    private void assertFilterResult(List<SemanticVersion> versionList, int majorMinorMax,
+                                    int majorThreshold, int minorThreshold, int patchThreshold,
+                                    int prevMinor, int prevPatch, String expected) {
+        assertEquals("[" + expected + "]",
+                SemanticVersion.filter(versionList, majorMinorMax, majorThreshold, minorThreshold, patchThreshold, prevMinor, prevPatch).toString());
     }
 }

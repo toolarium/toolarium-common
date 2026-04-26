@@ -20,13 +20,17 @@ import java.util.Date;
  * @author patrick
  */
 public final class DateUtil {
+    private static final DateTimeFormatter EUROPEAN_DATE_AT = DateTimeFormatter.ofPattern("dd.MM.yyyy@HH:mm:ss");
+    private static final DateTimeFormatter EUROPEAN_DATE_T = DateTimeFormatter.ofPattern("dd.MM.yyyy'T'HH:mm:ss");
+    private static final DateTimeFormatter EUROPEAN_DATE_SPACE = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+
 
     /**
      * Private class, the only instance of the singleton which will be created by accessing the holder class.
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final DateUtil INSTANCE = new DateUtil();
     }
 
@@ -311,9 +315,7 @@ public final class DateUtil {
      * @return date as string
      */
     public String toDateString(Date date, String sep) {
-        String europeanDatePattern = "dd.MM.yyyy" + sep + "HH:mm:ss";
-        DateTimeFormatter europeanDateFormatter = DateTimeFormatter.ofPattern(europeanDatePattern);
-        return europeanDateFormatter.format(toLocalDateTime(date));
+        return resolveFormatter(sep).format(toLocalDateTime(date));
     }
 
     
@@ -338,9 +340,25 @@ public final class DateUtil {
      * @return date as string
      */
     public String toDateString(Instant instant, String sep) {
-        String europeanDatePattern = "dd.MM.yyyy" + sep + "HH:mm:ss";
-        DateTimeFormatter europeanDateFormatter = DateTimeFormatter.ofPattern(europeanDatePattern);
-        return europeanDateFormatter.format(instant);
+        return resolveFormatter(sep).format(instant);
+    }
+
+
+    /**
+     * Resolve the cached formatter for the given separator
+     *
+     * @param sep the separator
+     * @return the formatter
+     */
+    private DateTimeFormatter resolveFormatter(String sep) {
+        if ("@".equals(sep)) {
+            return EUROPEAN_DATE_AT;
+        } else if ("T".equals(sep)) {
+            return EUROPEAN_DATE_T;
+        } else if (" ".equals(sep)) {
+            return EUROPEAN_DATE_SPACE;
+        }
+        return DateTimeFormatter.ofPattern("dd.MM.yyyy" + sep + "HH:mm:ss");
     }
 
 

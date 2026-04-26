@@ -6,6 +6,7 @@
 package com.github.toolarium.common.statistic;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -163,6 +164,57 @@ public class StatisticCounterTest  {
 
     
     /**
+     * Test empty counter returns zero for min
+     */
+    @Test
+    public void testEmptyCounter() {
+        StatisticCounter c = new StatisticCounter();
+        assertEquals(0, c.getCounter());
+        assertEquals(0.0, c.getMinValue());
+        assertEquals(0.0, c.getMaxValue());
+        assertEquals(0.0, c.getAverage());
+        assertTrue(Double.isNaN(c.getVariance()));
+        assertTrue(Double.isNaN(c.getStandardDeviation()));
+    }
+
+
+    /**
+     * Test negative values are correctly tracked as min
+     */
+    @Test
+    public void testNegativeValues() {
+        StatisticCounter c = new StatisticCounter();
+        c.add(-5);
+        c.add(-3);
+        c.add(-10);
+        c.add(2);
+
+        assertEquals(4, c.getCounter());
+        assertEquals(-10.0, c.getMinValue());
+        assertEquals(2.0, c.getMaxValue());
+        assertEquals(-4.0, c.getAverage());
+    }
+
+
+    /**
+     * Test clear resets min properly
+     */
+    @Test
+    public void testClearResetsMin() {
+        StatisticCounter c = new StatisticCounter();
+        c.add(5);
+        assertEquals(5.0, c.getMinValue());
+
+        c.clear();
+        assertEquals(0.0, c.getMinValue());
+        assertEquals(0, c.getCounter());
+
+        c.add(10);
+        assertEquals(10.0, c.getMinValue());
+    }
+
+
+    /**
      * Test
      */
     @Test
@@ -170,20 +222,20 @@ public class StatisticCounterTest  {
         StatisticCounter c1 = new StatisticCounter();
         StatisticCounter c2 = new StatisticCounter();
         StatisticCounter c3 = new StatisticCounter();
-        StatisticCounter c4 = new StatisticCounter();
 
         for (int i = 0; i < 25; i++) {
             c1.add(i);
         }
-        
+
         for (int i = 25; i < 50; i++) {
             c2.add(i);
         }
-        
+
         for (int i = 50; i < 75; i++) {
             c3.add(i);
         }
 
+        StatisticCounter c4 = new StatisticCounter();
         for (int i = 75; i < 100; i++) {
             c4.add(i);
         }

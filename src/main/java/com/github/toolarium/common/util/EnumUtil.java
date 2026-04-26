@@ -5,6 +5,9 @@
  */
 package com.github.toolarium.common.util;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * Simple enum utilities.
@@ -18,11 +21,14 @@ public final class EnumUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final EnumUtil INSTANCE = new EnumUtil();
     }
 
     
+    private final ConcurrentHashMap<Class<?>, Map<String, ?>> enumCache = new ConcurrentHashMap<>();
+
+
     /**
      * Constructor
      */
@@ -30,7 +36,7 @@ public final class EnumUtil {
         // NOP
     }
 
-    
+
     /**
      * Get the instance
      *
@@ -40,7 +46,7 @@ public final class EnumUtil {
         return HOLDER.INSTANCE;
     }
 
-    
+
     /**
      * Returns the enum constant of the specified enum type with the
      * specified name.  The name must match exactly an identifier used
@@ -54,22 +60,20 @@ public final class EnumUtil {
      * @return the enum constant of the specified enum type with the
      *         specified name
      */
+    @SuppressWarnings("unchecked")
     public <T extends Enum<T>> T valueOf(Class<T> enumType, String name) {
         if (name == null || name.trim().length() == 0) {
             return null;
         }
-        
-        T[] types = enumType.getEnumConstants();
-        String nameToParse = name.trim();
 
-        for (int i = 0; i < types.length; i++) {
-            T type = types[i];
-
-            if (type.name().equalsIgnoreCase(nameToParse)) {
-                return type;
+        Map<String, T> lookup = (Map<String, T>) enumCache.computeIfAbsent(enumType, k -> {
+            Map<String, T> map = new ConcurrentHashMap<>();
+            for (T constant : enumType.getEnumConstants()) {
+                map.put(constant.name().toUpperCase(), constant);
             }
-        }
+            return map;
+        });
 
-        return null;
+        return lookup.get(name.trim().toUpperCase());
     }
 }

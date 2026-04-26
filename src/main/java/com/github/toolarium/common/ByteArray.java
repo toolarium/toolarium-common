@@ -329,11 +329,14 @@ public class ByteArray
      * @return the reversed byte array (no copy)
      */
     public ByteArray reverse() {
-        ByteArray array = new ByteArray(length());
-        for (int i = length() - 1; i >= 0; i--) {
-            array.append(get(i));
+        byte[] reversed = new byte[length];
+        for (int i = 0; i < length; i++) {
+            reversed[i] = bytes[length - 1 - i];
         }
-        
+
+        ByteArray array = new ByteArray(length);
+        System.arraycopy(reversed, 0, array.bytes, 0, length);
+        array.length = length;
         return array;
     }
     
@@ -446,22 +449,25 @@ public class ByteArray
             return this;
         }
 
-        ByteArray workData = new ByteArray();
+        // estimate capacity to reduce reallocations
+        ByteArray workData = new ByteArray(length + newData.length);
         int maxLength = length();
         int len = replaceData.length();
-        
+
         int start = 0;
-        int end = indexOf(replaceData);
+        int end = ByteUtil.getInstance().indexOf(bytes, 0, length, replaceData.bytes, 0, replaceData.length, 0);
         while (start >= 0 && end >= 0) {
-            workData.append(getBytes(start, end));
+            if (end > start) {
+                workData.append(bytes, start, end - start);
+            }
             workData.append(newData);
             start = end + len;
 
-            end = indexOf(replaceData, start);
+            end = ByteUtil.getInstance().indexOf(bytes, 0, length, replaceData.bytes, 0, replaceData.length, start);
         }
 
         if (start < maxLength) {
-            workData.append(getBytes(start, maxLength));
+            workData.append(bytes, start, maxLength - start);
         }
         return workData;
     }
@@ -698,18 +704,16 @@ public class ByteArray
      * @return the byte array as hex string
      */
     public String toHex() {
-        StringBuffer hexNumber = new StringBuffer(bytes.length * 2);
-        for (int i = 0; i < bytes.length; i++) {
-            String value = Long.toString(bytes[i] & 0xff, 16);
-            if (value.length() == 1) {
-                value = "0" + value;
+        StringBuilder hexNumber = new StringBuilder(length * 2);
+        for (int i = 0; i < length; i++) {
+            int b = bytes[i] & 0xFF;
+            if (b < 0x10) {
+                hexNumber.append('0');
             }
-
-            value = value.toUpperCase();
-            hexNumber.append(value);
+            hexNumber.append(Integer.toHexString(b).toUpperCase());
         }
 
-        return hexNumber.toString();        
+        return hexNumber.toString();
     }
 
     

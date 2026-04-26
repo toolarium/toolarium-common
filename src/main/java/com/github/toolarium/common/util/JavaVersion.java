@@ -88,7 +88,7 @@ public enum JavaVersion {
      */
     @Override
     public String toString() {
-        return "" + javaVersion.getMajorNumber() + "." + javaVersion.getMajorNumber();
+        return "" + javaVersion.getMajorNumber() + "." + javaVersion.getMinorNumber();
     }
 
     
@@ -113,12 +113,14 @@ public enum JavaVersion {
         if (classFilename == null || classFilename.isEmpty()) {
             return null;
         }
-        
+
         if (!FileUtil.getInstance().isReadable(classFilename)) {
             return null;
         }
 
-        return resolveJavaVersion(new FileInputStream(classFilename));
+        try (InputStream fis = new FileInputStream(classFilename)) {
+            return resolveJavaVersion(fis);
+        }
     }
 
     
@@ -134,17 +136,16 @@ public enum JavaVersion {
             return null;
         }
 
-        DataInputStream in = new DataInputStream(classStream);
-        int magic = in.readInt();
-        if (magic != 0xcafebabe) {
-            return null;
+        try (DataInputStream in = new DataInputStream(classStream)) {
+            int magic = in.readInt();
+            if (magic != 0xcafebabe) {
+                return null;
+            }
+
+            int minor = in.readUnsignedShort();
+            int major = in.readUnsignedShort();
+            return resolveJavaVersion(minor, major);
         }
-
-        int minor = in.readUnsignedShort();
-        int major = in.readUnsignedShort();
-        in.close();
-
-        return resolveJavaVersion(minor, major);
     }
 
     

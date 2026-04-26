@@ -17,7 +17,7 @@ public final class ThreadUtil {
      *
      * @author patrick
      */
-    private static class HOLDER {
+    private static final class HOLDER {
         static final ThreadUtil INSTANCE = new ThreadUtil();
     }
 
@@ -41,20 +41,24 @@ public final class ThreadUtil {
 
     
     /**
-     * Sleep
+     * Sleep. If the thread is interrupted during sleep, the interrupt flag is restored
+     * and this method returns {@code true} so callers can react accordingly.
      *
-     * @param timeout the timeout
+     * @param timeout the timeout in milliseconds
+     * @return true if the sleep was interrupted, false otherwise
      */
-    public void sleep(Long timeout) {
+    public boolean sleep(Long timeout) {
         if (timeout == null || timeout <= 0) {
-            return;
+            return false;
         }
 
         // sleep
         try {
             Thread.sleep(timeout);
+            return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return true;
         }
     }
 }

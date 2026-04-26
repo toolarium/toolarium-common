@@ -20,8 +20,8 @@ import org.slf4j.event.Level;
 public final class Assert {
     private static final String LOG_MESSAGE_HEADER = "ASSERT FAILED | ";
     private static final Logger LOG = LoggerFactory.getLogger(Assert.class);
-    private static Level level = Level.DEBUG;
-    private static boolean logStackTrace = false;
+    private static volatile Level level = Level.DEBUG;
+    private static volatile boolean logStackTrace = false;
 
     
     /**

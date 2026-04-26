@@ -74,12 +74,12 @@ public final class PropertyExpander {
         int lastPosition = -1;
         boolean positionChange = true;
 
-        String result = "";
+        StringBuilder result = new StringBuilder();
         while (!context.isEnd() && positionChange) {
-            result += readTerm(context);
+            result.append(readTerm(context));
 
             if (!context.isEnd()) {
-                result += readBlanks(context);
+                result.append(readBlanks(context));
             }
 
             // loop protection
@@ -87,7 +87,7 @@ public final class PropertyExpander {
             lastPosition = context.getPosition();
         }
 
-        return result;
+        return result.toString();
     }
 
 
@@ -113,15 +113,15 @@ public final class PropertyExpander {
      * @return the read blanks
      */
     private String readBlanks(ExpanderContext context) {
-        String result = "";
+        StringBuilder result = new StringBuilder();
 
         Character c = context.getCurrent();
         while (c != null && c == ExpanderContext.BLANK) {
-            result += c;
+            result.append(c);
             c = context.readNext();
         }
 
-        return result;
+        return result.toString();
     }
 
 
@@ -133,18 +133,18 @@ public final class PropertyExpander {
      * @return the attribute
      */
     private String readAttribute(ExpanderContext context, boolean ignoreExpandEndCharacter) {
-        String result = "";
+        StringBuilder result = new StringBuilder();
 
         Character c = context.getCurrent();
         while (c != null
                && c != ExpanderContext.BLANK
                && c != ExpanderContext.START_ENV_CHARACTER
-               && (ignoreExpandEndCharacter || (!ignoreExpandEndCharacter && c != ExpanderContext.END_EXPAND_CHARACTER))) {
-            result += c;
+               && (ignoreExpandEndCharacter || c != ExpanderContext.END_EXPAND_CHARACTER)) {
+            result.append(c);
             c = context.readNext();
         }
 
-        return result;
+        return result.toString();
     }
 
 
@@ -155,7 +155,7 @@ public final class PropertyExpander {
      * @return the attribute
      */
     private String readEnvAttributeName(ExpanderContext context) {
-        String result = "";
+        StringBuilder result = new StringBuilder();
 
         Character c = context.getCurrent();
         while (c != null
@@ -163,11 +163,11 @@ public final class PropertyExpander {
                && c != ExpanderContext.START_ENV_CHARACTER
                && c != ExpanderContext.START_EXPAND_CHARACTER
                && c != ExpanderContext.END_EXPAND_CHARACTER) {
-            result += c;
+            result.append(c);
             c = context.readNext();
         }
 
-        return result;
+        return result.toString();
     }
 
 
@@ -238,8 +238,6 @@ public final class PropertyExpander {
             return defaultValue;
         }
 
-        String result = defaultValue;
-
         // try first to resolve context based properties
         String propEnv = null;
         Properties prop = PropertyExpanderContextBasedProperties.get();
@@ -257,6 +255,7 @@ public final class PropertyExpander {
             propEnv = System.getenv().get(tag);
         }
 
+        String result = defaultValue;
         if (propEnv != null && !propEnv.isEmpty()) {
             result = propEnv;
         }

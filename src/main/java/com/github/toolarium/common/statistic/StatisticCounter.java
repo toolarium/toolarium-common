@@ -55,7 +55,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
      */
     public synchronized void clear() {
         counter = 0;
-        min = -1;
+        min = Double.MAX_VALUE;
         max = 0;
         sum = 0.0;
         squareSum = 0.0;
@@ -68,8 +68,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
      * @param num the data to add
      */
     public synchronized void add(long num) {
-        Long val = Long.valueOf(num);
-        add(val.doubleValue());
+        add((double) num);
     }
     
     
@@ -87,7 +86,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
             max = num;
         }
 
-        if (min < 0 || num < min) {
+        if (num < min) {
             min = num;
         }
     }    
@@ -102,17 +101,32 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
             return;
         }
 
-        if (min < 0) {
-            min = statisticCounter.getMinValue();
-        } else {
-            min = Math.min(min, statisticCounter.getMinValue());
+        // take a consistent snapshot to avoid concurrent modification of the argument
+        long otherCounter;
+        double otherMin;
+        double otherMax;
+        double otherSum;
+        double otherSquareSum;
+        synchronized (statisticCounter) {
+            otherCounter = statisticCounter.counter;
+            otherMin = statisticCounter.min;
+            otherMax = statisticCounter.max;
+            otherSum = statisticCounter.sum;
+            otherSquareSum = statisticCounter.squareSum;
         }
-        
-        max = Math.max(max, statisticCounter.getMaxValue());
 
-        counter += statisticCounter.getCounter();
-        sum += statisticCounter.getSum();
-        squareSum += statisticCounter.getSquareSum();
+        if (otherCounter > 0) {
+            if (counter == 0) {
+                min = otherMin;
+            } else {
+                min = Math.min(min, otherMin);
+            }
+            max = Math.max(max, otherMax);
+        }
+
+        counter += otherCounter;
+        sum += otherSum;
+        squareSum += otherSquareSum;
     }
     
     
@@ -132,10 +146,10 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
      * @return the min value
      */
     public synchronized double getMinValue() {
-        if (min < 0) {
+        if (counter == 0) {
             return 0;
         }
-        
+
         return min;
     }
 

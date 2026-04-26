@@ -14,8 +14,8 @@ import java.util.Objects;
  * @author patrick
  */
 public class SecuredValue<T> implements ISecuredValue<T> {
-    private static final long serialVersionUID = -7130513492378872813L;
-    private T value;
+    private static final long serialVersionUID = -7130513492378872814L;
+    private transient T value;
     private String securedValue;
 
     

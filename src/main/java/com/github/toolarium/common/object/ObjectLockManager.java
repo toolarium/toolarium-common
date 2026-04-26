@@ -10,9 +10,12 @@ import com.github.toolarium.common.util.DateUtil;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +26,7 @@ import org.slf4j.LoggerFactory;
  * @author patrick
  */
 public class ObjectLockManager implements IObjectLockManager, Serializable {
-    private static final long serialVersionUID = -5129430604369864925L;
+    private static final long serialVersionUID = -5129430604369864926L;
     private static final Logger LOG = LoggerFactory.getLogger(ObjectLockManager.class);
     private volatile Integer lockSize;
     private transient Map<Object, Long> lockMap;
@@ -35,6 +38,7 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
     private Long unlockTimeout;
     private volatile boolean isInitialized;
     private volatile boolean cleanupAfterUnlock;
+    private final transient ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
 
     /**
@@ -99,65 +103,70 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
      * @see com.github.toolarium.common.object.IObjectLockManager#lock(java.util.List)
      */
     @Override
-    public synchronized <L extends Serializable> List<L> lock(List<L> theObjectLockList) {
-        if (!isInitialized) {
-            init();
-        }
+    public <L extends Serializable> List<L> lock(List<L> theObjectLockList) {
+        rwLock.writeLock().lock();
+        try {
+            if (!isInitialized) {
+                init();
+            }
 
-        List<L> resultList = new ArrayList<L>();
+            List<L> resultList = new ArrayList<L>();
 
-        long unlockStatisticCounter = 0;
-        long ignoreStatisticCounter = 0;
-        if (theObjectLockList != null && lockMap != null) {
-            int numberOfLockedElements = 0;
-            for (L lock : theObjectLockList) {
-                
-                Long unlockMapLockTimestamp = null;
-                if (unlockTimeout != null) {
-                    unlockMapLockTimestamp = unlockMap.get(lock); // check unlock cache
-                    if (unlockMapLockTimestamp != null && unlockMapLockTimestamp <= System.currentTimeMillis()) {
-                        unlockMapLockTimestamp = null;
-                        unlockMap.remove(lock); // its too old
-                    }
-                }
-                
-                if (unlockMapLockTimestamp != null) { // hit found in unlock cache, ignore it
-                    unlockStatisticCounter++;
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Found key in blocked unlock list: " + lock);
-                    }
-                } else if (lockMap.containsKey(lock)) { // lock found in lock map, ignore it
-                    ignoreStatisticCounter++;
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Key already locked: " + lock);
-                    }
-                } else {
-                    long timestamp = System.currentTimeMillis();
-                    lockMap.put(lock, timestamp);
-                    resultList.add(lock);
-                    numberOfLockedElements++;
-                    
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Add lock (" + DateUtil.getInstance().toTimestampString(new Date(timestamp)) + "): " + lock);
-                    }
-                }
+            long unlockStatisticCounter = 0;
+            long ignoreStatisticCounter = 0;
+            if (theObjectLockList != null && lockMap != null) {
+                int numberOfLockedElements = 0;
+                for (L lock : theObjectLockList) {
 
-                if (lockSize != null && lockSize <= numberOfLockedElements) {
-                    // max of locks reached
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("Max lock size reached: " + numberOfLockedElements);
+                    Long unlockMapLockTimestamp = null;
+                    if (unlockTimeout != null) {
+                        unlockMapLockTimestamp = unlockMap.get(lock); // check unlock cache
+                        if (unlockMapLockTimestamp != null && unlockMapLockTimestamp <= System.currentTimeMillis()) {
+                            unlockMapLockTimestamp = null;
+                            unlockMap.remove(lock); // its too old
+                        }
                     }
-                    
-                    lockSizeReachedCounter++;
-                    break;
+
+                    if (unlockMapLockTimestamp != null) { // hit found in unlock cache, ignore it
+                        unlockStatisticCounter++;
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Found key in blocked unlock list: " + lock);
+                        }
+                    } else if (lockMap.containsKey(lock)) { // lock found in lock map, ignore it
+                        ignoreStatisticCounter++;
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Key already locked: " + lock);
+                        }
+                    } else {
+                        long timestamp = System.currentTimeMillis();
+                        lockMap.put(lock, timestamp);
+                        resultList.add(lock);
+                        numberOfLockedElements++;
+
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Add lock (" + DateUtil.getInstance().toTimestampString(new Date(timestamp)) + "): " + lock);
+                        }
+                    }
+
+                    if (lockSize != null && lockSize <= numberOfLockedElements) {
+                        // max of locks reached
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Max lock size reached: " + numberOfLockedElements);
+                        }
+
+                        lockSizeReachedCounter++;
+                        break;
+                    }
                 }
             }
-        }
 
-        unlockStatistic.add(unlockStatisticCounter);
-        ignoreLockStatistic.add(ignoreStatisticCounter);
-        lockStatistic.add(resultList.size());
-        return resultList;
+            unlockStatistic.add(unlockStatisticCounter);
+            ignoreLockStatistic.add(ignoreStatisticCounter);
+            lockStatistic.add(resultList.size());
+            return resultList;
+        } finally {
+            rwLock.writeLock().unlock();
+        }
     }
 
 
@@ -165,32 +174,37 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
      * @see com.github.toolarium.common.object.IObjectLockManager#unlock(java.util.List)
      */
     @Override
-    public synchronized <L extends Serializable> List<L> unlock(List<L> theObjectLockList) {
-        if (!isInitialized) {
-            init();
-        }
+    public <L extends Serializable> List<L> unlock(List<L> theObjectLockList) {
+        rwLock.writeLock().lock();
+        try {
+            if (!isInitialized) {
+                init();
+            }
 
-        if (theObjectLockList == null || lockMap == null) {
-            return theObjectLockList;
-        }
+            if (theObjectLockList == null || lockMap == null) {
+                return theObjectLockList;
+            }
 
-        for (L lock : theObjectLockList) {
-            Long timestamp = lockMap.remove(lock);
-            
-            if (unlockTimeout != null && timestamp != null) {
-                unlockMap.put(lock, System.currentTimeMillis() + unlockTimeout); // set to unlock map cache
+            for (L lock : theObjectLockList) {
+                Long timestamp = lockMap.remove(lock);
 
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Removed lock (" + DateUtil.getInstance().toTimestampString(new Date(timestamp)) + "): " + lock);
-                }
-                
-                if (cleanupAfterUnlock) {
-                    cleanup();
+                if (unlockTimeout != null && timestamp != null) {
+                    unlockMap.put(lock, System.currentTimeMillis() + unlockTimeout); // set to unlock map cache
+
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Removed lock (" + DateUtil.getInstance().toTimestampString(new Date(timestamp)) + "): " + lock);
+                    }
+
+                    if (cleanupAfterUnlock) {
+                        cleanup();
+                    }
                 }
             }
+
+            return theObjectLockList;
+        } finally {
+            rwLock.writeLock().unlock();
         }
-        
-        return theObjectLockList;
     }
 
     
@@ -207,11 +221,14 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
     /**
      * Cleanup too old unlock elements 
      */
-    public synchronized void cleanup() {
+    public void cleanup() {
+        // No lock needed here — called within writeLock or standalone with ConcurrentHashMap
         long now = System.currentTimeMillis();
-        for (Map.Entry<Object, Long> e : unlockMap.entrySet()) {
+        Iterator<Map.Entry<Object, Long>> it = unlockMap.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Object, Long> e = it.next();
             if (now > e.getValue()) {
-                unlockMap.remove(e.getKey());
+                it.remove();
             }
         }
     }
@@ -221,10 +238,15 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
      * @see com.github.toolarium.common.object.IObjectLockManager#releaseResource()
      */
     @Override
-    public synchronized void releaseResource() {
-        this.lockMap = null;
-        this.unlockMap = null;
-        this.isInitialized = false;        
+    public void releaseResource() {
+        rwLock.writeLock().lock();
+        try {
+            this.lockMap = null;
+            this.unlockMap = null;
+            this.isInitialized = false;
+        } finally {
+            rwLock.writeLock().unlock();
+        }
     }
 
 

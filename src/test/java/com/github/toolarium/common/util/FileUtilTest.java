@@ -8,11 +8,17 @@ package com.github.toolarium.common.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -21,6 +27,7 @@ import org.junit.jupiter.api.Test;
  * @author patrick
  */
 public class FileUtilTest {
+    private static final Logger LOG = LoggerFactory.getLogger(FileUtilTest.class);
     private static final String TEST = "test";
 
     
@@ -42,7 +49,7 @@ public class FileUtilTest {
         assertEquals("a:test/name/", FileUtil.getInstance().simplifyPath("a:test/name/"));
         assertEquals("a:test/name", FileUtil.getInstance().simplifyPath("a:test/name"));
 
-        assertEquals("test", FileUtil.getInstance().simplifyPath("test"));
+        assertEquals(TEST, FileUtil.getInstance().simplifyPath(TEST));
         assertEquals("test/", FileUtil.getInstance().simplifyPath("test/"));
         assertEquals("/test", FileUtil.getInstance().simplifyPath("/test"));
         assertEquals("/test/", FileUtil.getInstance().simplifyPath("/test/"));
@@ -51,7 +58,7 @@ public class FileUtilTest {
         assertEquals("test/name/", FileUtil.getInstance().simplifyPath("test/name/"));
         assertEquals("test/name", FileUtil.getInstance().simplifyPath("test/name"));
 
-        assertEquals("test", FileUtil.getInstance().simplifyPath("test/name/.."));
+        assertEquals(TEST, FileUtil.getInstance().simplifyPath(TEST + "/name/.."));
         assertEquals("test/", FileUtil.getInstance().simplifyPath("test/name/../"));
         assertEquals("test/tt", FileUtil.getInstance().simplifyPath("test/name/../tt"));
         assertEquals("test/tt/yy/", FileUtil.getInstance().simplifyPath("test/name/../tt/yy/oo/../"));
@@ -130,7 +137,31 @@ public class FileUtilTest {
         assertEquals(jarFileName, FileUtil.getInstance().extractURLPath(createUrl("jar:file:/" + jarFileName + "!/jptools/util/tests/ClassPathSearchFileTest.txt")));
         assertEquals(header + "D:/test1/test2.jar", FileUtil.getInstance().extractURLPath(createUrl("jar:file:\\\\D:\\test1\\test2.jar!/META-INF")));
     }
-    
+
+
+    /**
+     * Search files test
+     *
+     * @throws IOException in case of an I/O exception
+     */
+    @Test
+    public void searchFiles() throws IOException {
+        List<Path> files = FileUtil.getInstance().searchFiles(new File("./src/").toPath(), TEST);
+        for (Path file : files) {
+            LOG.debug("Search file => " + file);
+        }
+        assertEquals(35, files.size());
+
+        files = FileUtil.getInstance().searchFiles(new File("./src/").toPath(), "", TEST);
+        assertEquals(35, files.size());
+
+        files = FileUtil.getInstance().searchFiles(new File("./src/").toPath(), "java", TEST);
+        for (Path file : files) {
+            LOG.debug("Search file => " + file);
+        }
+        assertEquals(35, files.size());
+    }
+
 
     /**
      * Create URL 
