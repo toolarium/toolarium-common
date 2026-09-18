@@ -6,6 +6,7 @@
 package com.github.toolarium.common.security;
 
 import java.io.Serializable;
+import javax.security.auth.Destroyable;
 
 
 /**
@@ -13,7 +14,7 @@ import java.io.Serializable;
  * 
  * @author patrick
  */
-public interface ISecuredValue<T> extends Serializable {
+public interface ISecuredValue<T> extends Serializable, AutoCloseable, Destroyable {
 
     /**
      * Get the value
@@ -33,8 +34,26 @@ public interface ISecuredValue<T> extends Serializable {
     
     /**
      * Get the secured value, e.g. to write into a log or a console
-     * 
+     *
      * @return the secured value
      */
     String getSecuredValue();
+
+
+    /**
+     * Zeros and releases any sensitive data held by this instance.
+     *
+     * @see java.lang.AutoCloseable#close()
+     */
+    @Override
+    void close();
+
+
+    /**
+     * Zeros and releases any sensitive data held by this instance.
+     *
+     * @see javax.security.auth.Destroyable#destroy()
+     */
+    @Override
+    void destroy();
 }

@@ -64,12 +64,14 @@ public class BandwidthThrottlingTest {
      */
     private BandwidthThrottling runBandwidthThrottling(String testName, long bandwidth, int updateInterval, long testCount, int maxSleepTime) {
         LOG.debug("" + testName + ", process bandwidth throttling: bandwidth=" + bandwidth + ", updateInterval=" + updateInterval + ", tests: " + testCount + ", maxSleepTime=" + maxSleepTime);
-        final long startTime = System.currentTimeMillis();
         BandwidthThrottling p = new BandwidthThrottling(bandwidth, updateInterval);
 
+        final long startTime = System.currentTimeMillis();
         for (int i = 0; i < testCount; i++) {
             p.bandwidthCheck();
-            ThreadUtil.getInstance().sleep(RandomGenerator.getInstance().getRandomNumber(maxSleepTime, false));
+            if (i < testCount - 1) {
+                ThreadUtil.getInstance().sleep(RandomGenerator.getInstance().getRandomNumber(maxSleepTime, false));
+            }
         }
 
         //LOG.debug("" + testName + ", process bandwidth throttling: ");

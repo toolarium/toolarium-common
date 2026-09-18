@@ -792,8 +792,9 @@ public final class Assert {
     public static <T extends Exception> void isNotEqual(Object object1, Object object2, Class<T> exceptionClass, String exceptionMessage, String logMessage) throws T {
         if (object1 == null) {
             isNotNull(object2, exceptionClass, exceptionMessage, logMessage);
+            return;
         }
-        
+
         isFalse(object1.equals(object2), exceptionClass, exceptionMessage, logMessage);
     }
     
@@ -823,7 +824,10 @@ public final class Assert {
         } catch (NoSuchMethodException e) {
             // NOP
         } catch (Exception e) {
-            LOG.warn("Error ouccred: " + e.getMessage(), e);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Error occurred: " + e.getMessage(), e);
+            }
+            LOG.warn("Error occurred: " + e.getMessage());
             throw new RuntimeException(exceptionMessage);
         }
 
@@ -831,7 +835,10 @@ public final class Assert {
             try {
                 exception = ClassInstanceUtil.getInstance().newInstance(exceptionClass);
             } catch (Exception e) {
-                LOG.warn("Error ouccred: " + e.getMessage(), e);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Error occurred: " + e.getMessage(), e);
+                }
+                LOG.warn("Error occurred: " + e.getMessage());
                 throw new RuntimeException(exceptionMessage);
             }
         }

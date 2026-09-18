@@ -317,7 +317,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
      * @see java.lang.Object#clone()
      */
     @Override
-    public StatisticCounter clone() {
+    public synchronized StatisticCounter clone() {
         StatisticCounter inst;
         try {
             inst = (StatisticCounter) super.clone();

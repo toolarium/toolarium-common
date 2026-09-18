@@ -364,10 +364,10 @@ public final class FileUtil {
             return null;
         }
         
-        return readFileContent(file.toPath(), StandardCharsets.UTF_8);
+        return readFileContent(file.toPath(), charset);
     }
 
-    
+
     /**
      * Read the file content
      *

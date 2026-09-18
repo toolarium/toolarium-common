@@ -171,20 +171,10 @@ public final class RandomGenerator {
      * @return random string
      */
     public synchronized String getRandomString(int size, char[] validCharacters) {
-        StringBuffer randomString = new StringBuffer();
-        byte[] bytes = new byte[1];
+        StringBuilder randomString = new StringBuilder();
         while (randomString.length() < size) {
-            getRandomNumber(validCharacters.length, true);
-            secureRandom.nextBytes(bytes);
-
-            for (int i = 0; i < validCharacters.length; i++) {
-                if ((char) bytes[0] == validCharacters[i]) {
-                    randomString.append((char) bytes[0]);
-                    break;
-                }
-            }
+            randomString.append(validCharacters[secureRandom.nextInt(validCharacters.length)]);
         }
-
         return randomString.toString();
     }
 

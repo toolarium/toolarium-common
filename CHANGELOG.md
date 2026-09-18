@@ -5,7 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [ 1.0.1 ] - 2026-04-26
+## [ 1.1.0 ] - 2026-09-18
+### Added
+- Added `ISecuredSecretValue` interface and `SecureSecret` for memory-safe secret storage (off-heap, deterministically zeroed on close/destroy).
+- Added `SecuredValueFactory` singleton for creating `ISecuredValue` and `ISecuredSecretValue` instances via `SecuredValueFactory.getInstance().create()` / `createSecret()`.
+- Added `MemoryUtil` and `MemoryUsageCalculator` for runtime memory inspection with optional Java agent support.
+- Added `ToolariumInstrumentation` in runtime package for optional JVM instrumentation access.
+
+### Changed
+- Moved security implementations to `security.impl` sub-package (`SecuredValue<T>`, `SecuredSecretValue`); public API remains in `security` package.
+- `SecuredSecretValue` now extends `SecuredValue<SecureSecret>` — `getValue()` returns the `SecureSecret` object directly.
+- `ISecuredValue.close()` and `destroy()` narrowed to throw no checked exceptions, eliminating boilerplate at call sites.
+- Applied consistent catch-block logging pattern (debug with stacktrace, warn without).
+- Deprecated `com.github.toolarium.common.security.SecuredValue` stub kept for backward compatibility; use `SecuredValueFactory` instead.
+
+### Fixed
+- BandwidthThrottlingTest timing stability on Windows.
+- `FileUtil.readFileContent(File, Charset)` was ignoring the `charset` parameter and always using UTF-8.
+- `Assert.isNotEqual(Object, Object)` threw `NullPointerException` when `object1` was `null` and `object2` was non-null.
+- `RandomGenerator.getRandomString(int, char[])` had a dead `getRandomNumber()` call and a biased rejection-sampling loop; replaced with uniform `nextInt(array.length)` index selection.
+- `StatisticCounter.clone()` read mutable fields without synchronization, risking a torn snapshot under concurrent `add()`/`clear()`; method is now `synchronized`.
+- `StackTrace.DEFAULT_EXCLUDES` was a mutable public `ArrayList` allowing callers to corrupt the global exclusion filter; wrapped in `Collections.unmodifiableList`.
+- `ObjectLockManager.cleanup()` called `unlockMap.entrySet()` without a null-check; `unlockMap` can be `null` after `releaseResource()`.
+- `BandwidthThrottling.toString()` constructed a new `SimpleDateFormat` on every call; replaced with a static `DateTimeFormatter` constant.
 
 ## [ 1.0.0 ] - 2026-04-26
 ### Added

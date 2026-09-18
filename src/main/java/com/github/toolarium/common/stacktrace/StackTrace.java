@@ -11,6 +11,7 @@ import java.io.PrintWriter;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
@@ -28,20 +29,22 @@ import java.util.function.Consumer;
 public final class StackTrace {
     
     /** Default Stacktrace exclues */
-    public static final List<String> DEFAULT_EXCLUDES = new ArrayList<String>();
+    public static final List<String> DEFAULT_EXCLUDES;
     private static String where;
 
     static {
-        DEFAULT_EXCLUDES.add("java.base/");
-        DEFAULT_EXCLUDES.add("jdk.internal.");
-        DEFAULT_EXCLUDES.add("sun.");
-        DEFAULT_EXCLUDES.add("com.sun.");
-        DEFAULT_EXCLUDES.add("java.lang.reflect.");
-        DEFAULT_EXCLUDES.add("org.testng.");
-        DEFAULT_EXCLUDES.add("junit.");
-        DEFAULT_EXCLUDES.add("org.junit.");
-        DEFAULT_EXCLUDES.add("org.gradle.");
-        DEFAULT_EXCLUDES.add("org.eclipse.jdt.internal.");
+        List<String> excludes = new ArrayList<String>();
+        excludes.add("java.base/");
+        excludes.add("jdk.internal.");
+        excludes.add("sun.");
+        excludes.add("com.sun.");
+        excludes.add("java.lang.reflect.");
+        excludes.add("org.testng.");
+        excludes.add("junit.");
+        excludes.add("org.junit.");
+        excludes.add("org.gradle.");
+        excludes.add("org.eclipse.jdt.internal.");
+        DEFAULT_EXCLUDES = Collections.unmodifiableList(excludes);
         where = StackTrace.class.getName();
     }
 

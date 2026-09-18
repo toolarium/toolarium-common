@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class ClassPathUtil {
     private static final String JAVA_LANG = "java.lang";
+    private static final String COLON_SPACE = ": ";
     private static final Logger LOG = LoggerFactory.getLogger(ClassPathUtil.class);
     private final char[] fileSeparators;
     private final Map<String, String> classPaths;
@@ -272,7 +273,10 @@ public final class ClassPathUtil {
                         }
                     }
                 } catch (Exception e) {
-                    LOG.warn("Could not read classes from url classloader " + cl.getClass().getName() + ": " + e.getMessage(), e);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Could not read classes from url classloader " + cl.getClass().getName() + COLON_SPACE + e.getMessage(), e);
+                    }
+                    LOG.warn("Could not read classes from url classloader " + cl.getClass().getName() + COLON_SPACE + e.getMessage());
                 }
             } else if (cl != null) {
                 if (LOG.isDebugEnabled()) {
@@ -292,7 +296,10 @@ public final class ClassPathUtil {
                         cl = null;
                     }
                 } catch (Exception e) {
-                    LOG.warn("Could not read classes from classloader " + cl.getClass().getName() + ": " + e.getMessage(), e);
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Could not read classes from classloader " + cl.getClass().getName() + COLON_SPACE + e.getMessage(), e);
+                    }
+                    LOG.warn("Could not read classes from classloader " + cl.getClass().getName() + COLON_SPACE + e.getMessage());
                 }
             }
 
@@ -420,7 +427,10 @@ public final class ClassPathUtil {
                 try {
                     url = new URL("jar", "", urlPath);
                 } catch (MalformedURLException ex) {
-                    LOG.warn("Invalid url " + urlPath + "!");
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("Invalid url " + urlPath + COLON_SPACE + ex.getMessage(), ex);
+                    }
+                    LOG.warn("Invalid url " + urlPath + COLON_SPACE + ex.getMessage());
                 }
 
                 addIfClass(url, zipE.getName(), c, prefixFilter);

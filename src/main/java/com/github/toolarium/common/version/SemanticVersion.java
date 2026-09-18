@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 
 /**
@@ -26,6 +27,21 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
     private static final String BACKSLASH_ESCAPED = "\\";
     private static final String PLUS_SPLIT = BACKSLASH_ESCAPED + PLUS_CHARACTER;
     private static final String DOT_SPLIT = BACKSLASH_ESCAPED + DOT_STR;
+    private static final String NPM_TILDE = "~";
+    private static final String NPM_CARET = "^";
+    private static final String NPM_GTE = ">=";
+    private static final String NPM_LTE = "<=";
+    private static final String NPM_GT = ">";
+    private static final String NPM_LT = "<";
+    private static final String NPM_EQ = "=";
+    private static final String NPM_STAR = "*";
+    private static final String NPM_X_WILDCARD = "x";
+    private static final String DOT_ZERO = ".0";
+    private static final String DOT_ZERO_ZERO = ".0.0";
+    private static final Pattern NPM_OR_PATTERN = Pattern.compile("\\s*\\|\\|\\s*");
+    private static final Pattern NPM_SPACE_PATTERN = Pattern.compile("\\s+");
+    private static final Pattern NPM_DOT_PATTERN = Pattern.compile(DOT_SPLIT);
+    private static final Pattern NPM_MINUS_PATTERN = Pattern.compile(MINUS_CHARACTER);
 
     private final Integer major;
     private final Integer minor;
@@ -361,14 +377,14 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
      */
     public boolean isEqualTo(SemanticVersion version) {
         if (getType() == VersionType.NPM) {
-            if (getMajor() != version.getMajor()) {
+            if (!Objects.equals(getMajor(), version.getMajor())) {
                 return false;
             }
             if (version.getMinor() == null) {
                 return true;
             }
             if (version.getPatch() == null) {
-                return true;
+                return Objects.equals(getMinor(), version.getMinor());
             }
         }
 
@@ -376,6 +392,39 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
     }
 
     
+    /**
+     * Checks whether this version satisfies an npm-style range expression.
+     * Must be used with a version parsed as {@link VersionType#NPM}.
+     *
+     * <p>Supported range forms: {@code *}, wildcard ({@code 3.x}), exact ({@code 1.2.3}),
+     * partial ({@code 1.2}), hyphen ({@code 1.2.3 - 2.3.4}), tilde ({@code ~1.2.3}),
+     * caret ({@code ^1.2.3}), comparators ({@code >=1.0.0 &lt;2.0.0}), OR ({@code 1.x || 2.x}).
+     *
+     * @param rangeExpression the npm range expression; {@code null} returns {@code false}
+     * @return true if the version satisfies the range
+     * @throws IllegalArgumentException if the range expression contains a non-numeric version component
+     */
+    public boolean satisfies(String rangeExpression) {
+        if (rangeExpression == null) {
+            return false;
+        }
+        final String expr = rangeExpression.trim();
+        if (expr.isEmpty() || NPM_STAR.equals(expr) || NPM_X_WILDCARD.equalsIgnoreCase(expr)) {
+            return true;
+        }
+        try {
+            for (String orPart : NPM_OR_PATTERN.split(expr)) {
+                if (npmSatisfiesAndGroup(orPart.trim())) {
+                    return true;
+                }
+            }
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid npm range expression: " + rangeExpression, e);
+        }
+        return false;
+    }
+
+
     /**
      * Determines if the current version is stable or not.
      * Stable version have a major version number strictly positive and no suffix tokens.
@@ -662,8 +711,262 @@ public class SemanticVersion extends AbstractVersion<SemanticVersion> implements
     
     
     /**
-     * Split the main token 
-     * 
+     * Evaluate a single AND-group of comparators against this version.
+     *
+     * @param group the AND-group string
+     * @return true if all comparators are satisfied
+     */
+    private boolean npmSatisfiesAndGroup(String group) {
+        if (group.isEmpty() || NPM_STAR.equals(group) || NPM_X_WILDCARD.equalsIgnoreCase(group)) {
+            return true;
+        }
+        final List<String[]> comparators = new ArrayList<String[]>();
+        final int hyphenPos = group.indexOf(" - ");
+        if (hyphenPos >= 0) {
+            npmAddHyphenRange(comparators, group.substring(0, hyphenPos).trim(), group.substring(hyphenPos + 3).trim());
+        } else {
+            for (String token : NPM_SPACE_PATTERN.split(group)) {
+                if (!token.isEmpty()) {
+                    npmAddComparators(comparators, token);
+                }
+            }
+        }
+        if (!getSuffixTokens().isEmpty() && !npmHasMatchingPrerelease(comparators)) {
+            return false;
+        }
+        for (String[] c : comparators) {
+            if (!npmEvaluate(c[0], c[1])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    /**
+     * Add comparators for a hyphen range "lower - upper".
+     *
+     * @param result the comparator list to populate
+     * @param lower the lower bound version string
+     * @param upper the upper bound version string
+     */
+    private static void npmAddHyphenRange(List<String[]> result, String lower, String upper) {
+        result.add(new String[]{NPM_GTE, npmFloorWildcard(lower)});
+        final String[] parts = NPM_DOT_PATTERN.split(upper);
+        int significant = 0;
+        for (String p : parts) {
+            if (NPM_STAR.equals(p) || NPM_X_WILDCARD.equalsIgnoreCase(p)) {
+                break;
+            }
+            significant++;
+        }
+        if (significant >= 3) {
+            result.add(new String[]{NPM_LTE, upper});
+        } else if (significant == 2) {
+            result.add(new String[]{NPM_LT, Integer.parseInt(parts[0]) + DOT_STR + (Integer.parseInt(parts[1]) + 1) + DOT_ZERO});
+        } else {
+            result.add(new String[]{NPM_LT, (Integer.parseInt(parts[0]) + 1) + DOT_ZERO_ZERO});
+        }
+    }
+
+
+    /**
+     * Expand a single token into comparators and add to the list.
+     *
+     * @param result the comparator list to populate
+     * @param token the token to expand
+     */
+    private void npmAddComparators(List<String[]> result, String token) {
+        if (NPM_STAR.equals(token) || NPM_X_WILDCARD.equalsIgnoreCase(token)) {
+            result.add(new String[]{NPM_GTE, "0.0.0"});
+        } else if (token.startsWith(NPM_TILDE)) {
+            npmExpandTilde(result, token.substring(1));
+        } else if (token.startsWith(NPM_CARET)) {
+            npmExpandCaret(result, token.substring(1));
+        } else if (token.startsWith(NPM_GTE) || token.startsWith(NPM_LTE)) {
+            result.add(new String[]{token.substring(0, 2), token.substring(2)});
+        } else if (token.startsWith(NPM_GT) || token.startsWith(NPM_LT) || token.startsWith(NPM_EQ)) {
+            result.add(new String[]{token.substring(0, 1), token.substring(1)});
+        } else {
+            npmExpandWildcard(result, token);
+        }
+    }
+
+
+    /**
+     * Expand a tilde range into comparators.
+     *
+     * @param result the comparator list to populate
+     * @param version the version string after the tilde
+     */
+    private static void npmExpandTilde(List<String[]> result, String version) {
+        final String[] parts = NPM_DOT_PATTERN.split(NPM_MINUS_PATTERN.split(version)[0]);
+        result.add(new String[]{NPM_GTE, version});
+        if (parts.length >= 2) {
+            result.add(new String[]{NPM_LT, Integer.parseInt(parts[0]) + DOT_STR + (Integer.parseInt(parts[1]) + 1) + DOT_ZERO});
+        } else {
+            result.add(new String[]{NPM_LT, (Integer.parseInt(parts[0]) + 1) + DOT_ZERO_ZERO});
+        }
+    }
+
+
+    /**
+     * Expand a caret range into comparators.
+     *
+     * @param result the comparator list to populate
+     * @param version the version string after the caret
+     */
+    private static void npmExpandCaret(List<String[]> result, String version) {
+        final String[] parts = NPM_DOT_PATTERN.split(NPM_MINUS_PATTERN.split(version)[0]);
+        final int major = Integer.parseInt(parts[0]);
+        int minor = 0;
+        if (parts.length > 1) {
+            minor = npmParseInt(parts[1]);
+        }
+        int patch = 0;
+        if (parts.length > 2) {
+            patch = npmParseInt(parts[2]);
+        }
+        result.add(new String[]{NPM_GTE, version});
+        if (major > 0) {
+            result.add(new String[]{NPM_LT, (major + 1) + DOT_ZERO_ZERO});
+        } else if (minor > 0) {
+            result.add(new String[]{NPM_LT, "0" + DOT_STR + (minor + 1) + DOT_ZERO});
+        } else {
+            result.add(new String[]{NPM_LT, "0.0." + (patch + 1)});
+        }
+    }
+
+
+    /**
+     * Expand a wildcard version range into comparators.
+     *
+     * @param result the comparator list to populate
+     * @param token the token (e.g. {@code 3.1.x}, {@code 3.x})
+     */
+    private static void npmExpandWildcard(List<String[]> result, String token) {
+        final String[] parts = NPM_DOT_PATTERN.split(token);
+        int wildcardIdx = parts.length;
+        for (int i = 0; i < parts.length; i++) {
+            if (NPM_STAR.equals(parts[i]) || NPM_X_WILDCARD.equalsIgnoreCase(parts[i])) {
+                wildcardIdx = i;
+                break;
+            }
+        }
+        if (wildcardIdx == parts.length) {
+            // No wildcard found — plain version, treat as equality
+            result.add(new String[]{NPM_EQ, token});
+        } else if (wildcardIdx == 0) {
+            result.add(new String[]{NPM_GTE, "0.0.0"});
+        } else if (wildcardIdx == 1) {
+            final int major = Integer.parseInt(parts[0]);
+            result.add(new String[]{NPM_GTE, major + DOT_ZERO_ZERO});
+            result.add(new String[]{NPM_LT, (major + 1) + DOT_ZERO_ZERO});
+        } else {
+            final int major = Integer.parseInt(parts[0]);
+            final int minor = Integer.parseInt(parts[1]);
+            result.add(new String[]{NPM_GTE, major + DOT_STR + minor + DOT_ZERO});
+            result.add(new String[]{NPM_LT, major + DOT_STR + (minor + 1) + DOT_ZERO});
+        }
+    }
+
+
+    /**
+     * Evaluate a single comparator against this version.
+     *
+     * @param op the operator string
+     * @param versionStr the version string
+     * @return true if the comparator is satisfied
+     */
+    private boolean npmEvaluate(String op, String versionStr) {
+        try {
+            final SemanticVersion v = new SemanticVersion(versionStr, VersionType.NPM);
+            if (NPM_GTE.equals(op)) {
+                return isGreaterThanOrEqualTo(v);
+            } else if (NPM_LTE.equals(op)) {
+                return isLowerThanOrEqualTo(v);
+            } else if (NPM_GT.equals(op)) {
+                return isGreaterThan(v);
+            } else if (NPM_LT.equals(op)) {
+                return isLowerThan(v);
+            } else if (NPM_EQ.equals(op)) {
+                return isEqualTo(v);
+            }
+        } catch (IllegalArgumentException e) { // NOPMD
+            // unparseable version in comparator
+        }
+        return false;
+    }
+
+
+    /**
+     * Check whether any comparator has a prerelease qualifier at the same
+     * [major, minor, patch] tuple as this version (NPM prerelease rule).
+     *
+     * @param comparators the list of [op, versionStr] pairs
+     * @return true if a matching prerelease comparator is found
+     */
+    private boolean npmHasMatchingPrerelease(List<String[]> comparators) {
+        for (String[] c : comparators) {
+            if (c[1].contains(MINUS_CHARACTER)) {
+                try {
+                    final SemanticVersion cv = new SemanticVersion(c[1], VersionType.NPM);
+                    if (Objects.equals(getMajor(), cv.getMajor())
+                            && Objects.equals(getMinor(), cv.getMinor())
+                            && Objects.equals(getPatch(), cv.getPatch())
+                            && !cv.getSuffixTokens().isEmpty()) {
+                        return true;
+                    }
+                } catch (IllegalArgumentException e) { // NOPMD
+                    // skip unparseable comparator version
+                }
+            }
+        }
+        return false;
+    }
+
+
+    /**
+     * Return a copy of the version string with wildcard components replaced by {@code 0}.
+     *
+     * @param version the version string
+     * @return normalized version string
+     */
+    private static String npmFloorWildcard(String version) {
+        final String[] parts = NPM_DOT_PATTERN.split(version);
+        final StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append(DOT_STR);
+            }
+            if (NPM_STAR.equals(parts[i]) || NPM_X_WILDCARD.equalsIgnoreCase(parts[i])) {
+                sb.append("0");
+            } else {
+                sb.append(parts[i]);
+            }
+        }
+        return sb.toString();
+    }
+
+
+    /**
+     * Parse an integer from a version part, returning 0 for wildcards or non-numeric values.
+     *
+     * @param s the string to parse
+     * @return parsed integer or 0
+     */
+    private static int npmParseInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) { // NOPMD
+            return 0;
+        }
+    }
+
+
+    /**
+     * Split the main token
+     *
      * @param tokens the tokens
      * @return the main tokens
      */

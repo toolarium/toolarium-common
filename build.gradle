@@ -15,8 +15,50 @@ dependencies {
     implementation "org.slf4j:slf4j-api:${commonGradleSlf4jApiVersion}"
     testRuntimeOnly "ch.qos.logback:logback-classic:${commonGradleLogbackVersion}"
     
+    // parameterized tests
+    testImplementation "org.junit.jupiter:junit-jupiter-params:5.12.2"
+
     // test resolve files in jars
     testRuntimeOnly files("src/test/java/")
     testRuntimeOnly files("lib-test/toolarium-classpath-test1.jar")
     testRuntimeOnly files("lib-test/toolarium-classpath-test2.jar")
 }
+
+
+/****************************************************************************************
+ * Suppress obsolete source/target warnings when compiling with a newer JDK
+ ****************************************************************************************/
+tasks.withType(JavaCompile) {
+    options.compilerArgs << '-Xlint:-options'
+}
+
+
+/****************************************************************************************
+ * Integration test with toolarium-java-agent
+ ****************************************************************************************/
+def agentJar = file("${rootDir}/../toolarium-java-agent/build/libs/toolarium-java-agent-1.0.0-SNAPSHOT.jar")
+
+sourceSets {
+    integrationTest {
+        java.srcDir 'src/integration-test/java'
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+task integrationTest(type: Test) {
+    description = 'Runs integration tests with the toolarium-java-agent loaded as a JVM agent.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    onlyIf { agentJar.exists() }
+    jvmArgs "-javaagent:${agentJar.absolutePath}"
+    mustRunAfter test
+}
+check.dependsOn integrationTest

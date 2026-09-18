@@ -223,6 +223,9 @@ public class ObjectLockManager implements IObjectLockManager, Serializable {
      */
     public void cleanup() {
         // No lock needed here — called within writeLock or standalone with ConcurrentHashMap
+        if (unlockMap == null) {
+            return;
+        }
         long now = System.currentTimeMillis();
         Iterator<Map.Entry<Object, Long>> it = unlockMap.entrySet().iterator();
         while (it.hasNext()) {

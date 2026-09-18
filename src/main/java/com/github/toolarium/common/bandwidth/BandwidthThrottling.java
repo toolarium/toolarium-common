@@ -10,7 +10,9 @@ import com.github.toolarium.common.statistic.StatisticCounter;
 import com.github.toolarium.common.util.TextUtil;
 import com.github.toolarium.common.util.ThreadUtil;
 import java.io.Serializable;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 
 /**
@@ -23,6 +25,7 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
     public static final int NO_BANDWIDTH = -1;
     
     private static final long serialVersionUID = -129363107817850760L;
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
     private long bandwidth;
     private long count;
     private int updateInterval;
@@ -227,7 +230,6 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
      */
     @Override
     public String toString() {
-        SimpleDateFormat formatter = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss.SSS");
         TimeDifferenceFormatter df = new TimeDifferenceFormatter();
         StringBuilder builder = new StringBuilder();
         builder.append("Bandwidth throttling:").append(TextUtil.NL);
@@ -238,10 +240,10 @@ public class BandwidthThrottling implements IBandwidthThrottling, Serializable {
 
         synchronized (this) {
             if (startTime != null) {
-                startTimeStr = formatter.format(startTime);
+                startTimeStr = DATE_FORMATTER.format(Instant.ofEpochMilli(startTime));
             }
             if (lastUpdateTime != null) {
-                lastUpdateTimeStr = formatter.format(lastUpdateTime);
+                lastUpdateTimeStr = DATE_FORMATTER.format(Instant.ofEpochMilli(lastUpdateTime));
             }
             if (startTime != null && lastUpdateTime != null) {
                 usedTimeStr = df.formatAsString(lastUpdateTime - startTime);

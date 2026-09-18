@@ -8,6 +8,7 @@ package com.github.toolarium.common.util;
 import com.github.toolarium.common.ByteArray;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
+import java.text.DecimalFormat;
 
 
 /**
@@ -16,7 +17,9 @@ import java.math.BigInteger;
  * @author patrick
  */
 public final class ByteUtil {
-    
+    private static final String BYTE_SORT_TYPE = "BKMGTPEZY";
+    private static final ThreadLocal<DecimalFormat> FORMATTER = ThreadLocal.withInitial(() -> new DecimalFormat("##.#"));
+
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      *
@@ -25,7 +28,7 @@ public final class ByteUtil {
     private static final class HOLDER {
         static final ByteUtil INSTANCE = new ByteUtil();
     }
-    
+
 
     /**
      * Constructor
@@ -45,6 +48,25 @@ public final class ByteUtil {
     }
     
     
+    /**
+     * Format a byte count as a human-readable string (e.g. {@code "16B"}, {@code "1.5K"}, {@code "2M"}).
+     *
+     * @param size the size in bytes
+     * @return the formatted string
+     */
+    public String prettyPrintByteSize(long size) {
+        double byteSize = size;
+        int i = 0;
+
+        while (byteSize > 768.0) {
+            i++;
+            byteSize /= 1024.0;
+        }
+
+        return (FORMATTER.get().format(byteSize) + BYTE_SORT_TYPE.charAt(i)).trim();
+    }
+
+
     /**
      * Check two blocks for equality.
      * The specified sub blocks of the given byte arrays are checked for equality.
