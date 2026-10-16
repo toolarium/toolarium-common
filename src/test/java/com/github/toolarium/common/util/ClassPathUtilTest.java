@@ -11,9 +11,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.github.toolarium.common.statistic.IStatisticCounter;
+import com.github.toolarium.common.statistic.PercentileHistogram;
+import com.github.toolarium.common.statistic.PercentileHistogramTest;
+import com.github.toolarium.common.statistic.StatisticCounter;
+import com.github.toolarium.common.statistic.StatisticCounterTest;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -28,6 +34,8 @@ import org.slf4j.LoggerFactory;
  */
 public class ClassPathUtilTest {
     private static final Logger LOG = LoggerFactory.getLogger(ClassPathUtilTest.class);
+    private static final String LIST_START = "[";
+    private static final String LIST_END = "]";
     
     /**
      * Test
@@ -37,19 +45,18 @@ public class ClassPathUtilTest {
         assertEquals(ClassPathUtil.class.getName(), ClassPathUtil.getInstance().searchClassByName(ClassPathUtil.class.getName()).get(0));
         assertNull(ClassPathUtil.getInstance().searchClassByName("com.github.toolarium.common.util.ClassPathUtil2"));
         assertFalse(ClassPathUtil.getInstance().searchClassByName("org.slf4j.Logger").isEmpty());
-        assertEquals("[" + Logger.class.getName() + "]", ClassPathUtil.getInstance().searchClassByName(Logger.class.getName()).toString());
+        assertEquals(LIST_START + Logger.class.getName() + LIST_END, ClassPathUtil.getInstance().searchClassByName(Logger.class.getName()).toString());
     }
 
 
     /**
-     * Test read package 
+     * Test read package
      */
     @Test
     public void testReadFromPackage() {
         assertNull(ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.utility"));
         assertFalse(ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.util").isEmpty());
-        assertEquals("[com.github.toolarium.common.statistic.IStatisticCounter, com.github.toolarium.common.statistic.StatisticCounter, com.github.toolarium.common.statistic.StatisticCounterTest]", 
-                     ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic").toString());
+        assertEquals(statisticPackageClasses(), ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic"));
     }
 
 
@@ -70,8 +77,8 @@ public class ClassPathUtilTest {
     public void testSearchClass() {
         assertTrue(ClassPathUtil.getInstance().checkClassByName(StringUtil.class.getName()));
         assertTrue(ClassPathUtil.getInstance().checkClassByName("StringUtil"));
-        assertEquals("[" + StringUtil.class.getName() + "]", "" + ClassPathUtil.getInstance().searchClassByName(StringUtil.class.getName()));
-        assertEquals("[" + ByteUtil.class.getName() + "]", "" + ClassPathUtil.getInstance().searchClassByName(ByteUtil.class.getName()));
+        assertEquals(LIST_START + StringUtil.class.getName() + LIST_END, "" + ClassPathUtil.getInstance().searchClassByName(StringUtil.class.getName()));
+        assertEquals(LIST_START + ByteUtil.class.getName() + LIST_END, "" + ClassPathUtil.getInstance().searchClassByName(ByteUtil.class.getName()));
         assertEquals("[java.lang.Integer]", "" + ClassPathUtil.getInstance().searchClassByName("java.lang.Integer"));
         assertEquals("[java.lang.Integer]", "" + ClassPathUtil.getInstance().searchClassByName("Integer"));
         assertNull(ClassPathUtil.getInstance().searchClassByName("Integerf"));
@@ -87,8 +94,9 @@ public class ClassPathUtilTest {
      */
     @Test
     public void testSearchClassByRegExp() {
-        assertEquals("[com.github.toolarium.common.statistic.IStatisticCounter, com.github.toolarium.common.statistic.StatisticCounter, com.github.toolarium.common.statistic.StatisticCounterTest]",
-                      ClassPathUtil.getInstance().searchClassByRegExp("^com.github.toolarium.common.statistic\\.*[a-zA-Z]*Statistic.*").toString());
+        String pkg = "com.github.toolarium.common.statistic";
+        String expected = LIST_START + pkg + ".IStatisticCounter, " + pkg + ".StatisticCounter, " + pkg + ".StatisticCounterTest" + LIST_END;
+        assertEquals(expected, ClassPathUtil.getInstance().searchClassByRegExp("^com.github.toolarium.common.statistic\\.*[a-zA-Z]*Statistic.*").toString());
     }
 
     
@@ -97,12 +105,10 @@ public class ClassPathUtilTest {
      */
     @Test
     public void testSearchClassByPackageName() {
-        String fileNames = "[com.github.toolarium.common.statistic.IStatisticCounter, com.github.toolarium.common.statistic.StatisticCounter, com.github.toolarium.common.statistic.StatisticCounterTest]";
-        String classPathResult = "" + ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic");
-        assertEquals(fileNames, classPathResult);
+        assertEquals(statisticPackageClasses(), ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic"));
         assertNull(ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic2"));
 
-        fileNames = "[java.lang.annotation.Annotation, java.lang.annotation.AnnotationFormatError, java.lang.annotation.AnnotationTypeMismatchException, java.lang.annotation.Documented, java.lang.annotation.ElementType, "
+        String fileNames = "[java.lang.annotation.Annotation, java.lang.annotation.AnnotationFormatError, java.lang.annotation.AnnotationTypeMismatchException, java.lang.annotation.Documented, java.lang.annotation.ElementType, "
                   + "java.lang.annotation.IncompleteAnnotationException, java.lang.annotation.Inherited, java.lang.annotation.Native, java.lang.annotation.Repeatable, java.lang.annotation.Retention, java.lang.annotation.RetentionPolicy, "
                   + "java.lang.annotation.Target]";
 
@@ -134,7 +140,7 @@ public class ClassPathUtilTest {
     public void testSearchFileByRegExp() throws IOException {
         final String testResourceFile = "com/github/toolarium/common/util/TestResourceFile.txt";
         assertNotNull(ClassPathUtil.getInstance().searchFileByRegExp(".*/TestResourceFile.*"));
-        assertEquals(ClassPathUtil.getInstance().searchFileByRegExp(".*/TestResourceFile.*").toString(), "[" + testResourceFile + "]");
+        assertEquals(ClassPathUtil.getInstance().searchFileByRegExp(".*/TestResourceFile.*").toString(), LIST_START + testResourceFile + LIST_END);
 
         List<URL> urlList = new ArrayList<URL>();
         for (URL url : ClassPathUtil.getInstance().searchFileByRegExpAsURLList(".*/TestResourceFile.*")) {
@@ -230,6 +236,25 @@ public class ClassPathUtilTest {
     }
 
     
+    /**
+     * Returns the sorted list of all classes in the statistic package.
+     * Update this list whenever a class is added to or removed from the package.
+     *
+     * @return sorted class names
+     */
+    private List<String> statisticPackageClasses() {
+        List<String> classes = Arrays.asList(
+                IStatisticCounter.class.getName(),
+                PercentileHistogram.class.getName(),
+                PercentileHistogramTest.class.getName(),
+                StatisticCounter.class.getName(),
+                StatisticCounterTest.class.getName()
+        );
+        Collections.sort(classes);
+        return classes;
+    }
+
+
     /**
      * Get the working path
      *

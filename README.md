@@ -216,6 +216,9 @@ Pre-defined constants: `ByteArray.NL`, `CR`, `TAB`, `SPACE`, `DOT`, `EMPTY`.
 ### `StatisticCounter`
 
 Thread-safe accumulator that computes running statistics for a stream of numbers in a single pass.
+Average and variance use **Welford's online algorithm** (and Chan's parallel algorithm when merging),
+which is numerically stable even for large values with a small variance. Negative values are fully supported.
+Concurrent reads run in parallel; writes are exclusive (`ReadWriteLock`).
 
 ```java
 StatisticCounter stats = new StatisticCounter();
@@ -232,7 +235,7 @@ stats.getVariance();          // variance
 stats.getStandardDeviation(); // std dev
 stats.getRange();             // max - min
 
-// Merge two counters
+// Merge two counters (Chan's algorithm — numerically stable)
 StatisticCounter combined = new StatisticCounter();
 combined.add(stats);
 
@@ -241,6 +244,46 @@ StatisticCounter snapshot = stats.clone();
 
 System.out.println(stats.toString("Request latency (ms):"));
 ```
+
+
+---
+
+### `PercentileHistogram`
+
+Streaming percentile estimator backed by a log-scale histogram. Estimates P50–P99.9 with a guaranteed
+relative error of less than 0.1% of the value. Constant series (e.g. all measurements identical) are
+reported exactly.
+
+**The constructor argument is the largest value you need to measure precisely.** The histogram sizes its
+memory to guarantee < 0.1% relative error up to that value. Whether you insert 100 or 100 million samples,
+the footprint stays the same (memory is allocated lazily on first use). Values above the configured maximum
+are still counted but land in the same last bucket — they are included in percentile calculations with
+reduced precision. Only negative values are rejected.
+
+**Sizing guide** — pick the constructor argument that matches your measurement domain:
+
+| I measure… | Constructor argument | Histogram footprint |
+|------------|----------------------|---------------------|
+| Latency up to ~60 s in ms | `60_000` | ~64 KB |
+| Latency up to ~1 s in ns | `1_000_000_000L` | ~176 KB |
+| Memory up to 16 GB in bytes | `16L * 1024 * 1024 * 1024` | ~208 KB |
+| Anything up to 64 TB *(default)* | — | ~304 KB |
+
+```java
+// Measuring JVM heap usage — values range from 0 to at most 16 GB
+PercentileHistogram histogram = new PercentileHistogram(16L * 1024 * 1024 * 1024);
+// histogram's own footprint: ~208 KB, fixed regardless of how many samples are added
+
+// Every 5 seconds: record the current heap reading
+histogram.add(currentMemoryBytes);
+
+// Every 10 minutes: read percentiles, then reset for the next window
+long p50 = histogram.getValueAtQuantile(0.50);
+long p99 = histogram.getValueAtQuantile(0.99);
+histogram.clear(); // resets counts; the 208 KB stays allocated for reuse
+```
+
+Thread-safe: concurrent reads (quantile queries) run in parallel; writes are exclusive (`ReadWriteLock`).
 
 
 ---

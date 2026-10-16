@@ -150,16 +150,16 @@ public class FileUtilTest {
         for (Path file : files) {
             LOG.debug("Search file => " + file);
         }
-        assertEquals(40, files.size());
+        assertEquals(41, files.size());
 
         files = FileUtil.getInstance().searchFiles(new File("./src/").toPath(), "", TEST);
-        assertEquals(40, files.size());
+        assertEquals(41, files.size());
 
         files = FileUtil.getInstance().searchFiles(new File("./src/").toPath(), "java", TEST);
         for (Path file : files) {
             LOG.debug("Search file => " + file);
         }
-        assertEquals(40, files.size());
+        assertEquals(41, files.size());
     }
 
 
