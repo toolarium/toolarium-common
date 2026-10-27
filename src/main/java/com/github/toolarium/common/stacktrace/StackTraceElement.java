@@ -9,10 +9,6 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * 
- * @author patrick
- */
-/**
  * An element in a stack trace. Each element represents a single stack frame.
  * All stack frames except for the one at the top of the stack represent
  * a method invocation.  The frame at the top of the stack represents the 
@@ -221,9 +217,7 @@ public final class StackTraceElement implements Serializable {
 
         if (isNativeMethod()) {
             builder.append("(Native Method)");
-        }
-
-        if (fileName != null && lineNumber >= 0) {
+        } else if (fileName != null && lineNumber >= 0) {
             builder.append("(");
             builder.append(fileName);
             builder.append(":");

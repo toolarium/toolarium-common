@@ -14,10 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 
@@ -304,6 +308,89 @@ public class PercentileHistogramTest {
 
 
     /**
+     * Test that corrupt serialized data is rejected with an {@link InvalidObjectException}.
+     *
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testDeserializationOfCorruptData() throws Exception {
+        final long value = 123_456_789L;
+        PercentileHistogram original = new PercentileHistogram();
+        original.add(value);
+        byte[] data = serialize(original);
+        assertEquals(original, deserialize(data));
+
+        // the primitive fields are serialized sorted by name: max, min, rangeCount, totalCount
+        byte[] pattern = ByteBuffer.allocate(2 * Long.BYTES).putLong(value).putLong(value).array();
+        int maxPos = indexOf(data, pattern);
+        assertTrue(maxPos >= 0);
+        int minPos = maxPos + Long.BYTES;
+        int rangeCountPos = minPos + Long.BYTES;
+        int totalCountPos = rangeCountPos + Integer.BYTES;
+
+        byte[] corruptRangeCount = data.clone();
+        ByteBuffer.wrap(corruptRangeCount).putInt(rangeCountPos, 1);
+        assertThrows(InvalidObjectException.class, () -> deserialize(corruptRangeCount));
+
+        byte[] corruptTotalCount = data.clone();
+        ByteBuffer.wrap(corruptTotalCount).putLong(totalCountPos, 2L);
+        assertThrows(InvalidObjectException.class, () -> deserialize(corruptTotalCount));
+
+        byte[] corruptMin = data.clone();
+        ByteBuffer.wrap(corruptMin).putLong(minPos, value + 1);
+        assertThrows(InvalidObjectException.class, () -> deserialize(corruptMin));
+    }
+
+
+    /**
+     * Serializes an object.
+     *
+     * @param object the object to serialize
+     * @return the serialized data
+     * @throws IOException in case of an I/O error
+     */
+    private static byte[] serialize(Object object) throws IOException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(object);
+        }
+        return bos.toByteArray();
+    }
+
+
+    /**
+     * Deserializes an object.
+     *
+     * @param data the serialized data
+     * @return the object
+     * @throws IOException in case of an I/O error
+     * @throws ClassNotFoundException in case the class could not be found
+     */
+    private static Object deserialize(byte[] data) throws IOException, ClassNotFoundException {
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data))) {
+            return ois.readObject();
+        }
+    }
+
+
+    /**
+     * Finds the first position of a pattern in the data.
+     *
+     * @param data the data
+     * @param pattern the pattern
+     * @return the position or -1 if the pattern was not found
+     */
+    private static int indexOf(byte[] data, byte[] pattern) {
+        for (int i = 0; i <= data.length - pattern.length; i++) {
+            if (Arrays.equals(data, i, i + pattern.length, pattern, 0, pattern.length)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+
+    /**
      * Records samples and asserts that all quantiles are within the relative precision of the exact nearest-rank percentiles.
      *
      * @param generator the sample generator
@@ -336,5 +423,120 @@ public class PercentileHistogramTest {
             assertTrue(error <= exact * MAX_RELATIVE_ERROR,
                     "Quantile " + QUANTILES[i] + ": expected " + exact + " but was " + values[i]);
         }
+    }
+
+
+    /**
+     * Test that concurrent symmetric equals calls with active writers do not deadlock and that equals and hashCode are consistent.
+     *
+     * @throws InterruptedException in case of interrupt
+     */
+    @Test
+    public void testConcurrentEqualsNoDeadlock() throws InterruptedException {
+        final PercentileHistogram a = new PercentileHistogram();
+        final PercentileHistogram b = new PercentileHistogram();
+        final AtomicBoolean failed = new AtomicBoolean(false);
+        final int loops = 20_000;
+
+        Thread[] threads = new Thread[] {
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    a.equals(b);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    b.equals(a);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    a.add(i);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    b.add(i * 2L);
+                }
+            })
+        };
+
+        for (Thread t : threads) {
+            t.setDaemon(true);
+            t.start();
+        }
+        for (Thread t : threads) {
+            t.join(30_000L);
+            if (t.isAlive()) {
+                failed.set(true);
+            }
+        }
+        assertTrue(!failed.get(), "equals deadlocked");
+
+        PercentileHistogram c = new PercentileHistogram();
+        PercentileHistogram d = new PercentileHistogram();
+        for (int i = 0; i < 100; i++) {
+            c.add(i);
+            d.add(i);
+        }
+        assertEquals(c, d);
+        assertEquals(c.hashCode(), d.hashCode());
+        assertEquals(c, c.clone());
+        assertEquals(c.hashCode(), c.clone().hashCode());
+    }
+
+
+    /**
+     * Test the rank of a quantile is calculated from its decimal value (nearest-rank method).
+     */
+    @Test
+    public void testRankOfDecimalQuantile() {
+        PercentileHistogram histogram = new PercentileHistogram();
+        for (long i = 1; i <= 100; i++) {
+            histogram.add(i);
+        }
+
+        assertEquals(7, histogram.getValueAtQuantile(0.07));
+        assertEquals(55, histogram.getValueAtQuantile(0.55));
+        assertArrayEquals(new long[] {1, 7, 55, 100}, histogram.getValuesAtQuantiles(0.0, 0.07, 0.55, 1.0));
+        assertEquals(1, PercentileHistogram.rank(0.0, 100));
+        assertEquals(100, PercentileHistogram.rank(1.0, 100));
+    }
+
+
+    /**
+     * Test the maximum is reported exactly also if it exceeds the configured range.
+     */
+    @Test
+    public void testMaxAboveConfiguredRange() {
+        PercentileHistogram histogram = new PercentileHistogram(1000L);
+        histogram.add(10);
+        histogram.add(5000);
+        histogram.add(1_000_000);
+
+        assertEquals(1_000_000, histogram.getValueAtQuantile(1.0));
+        assertEquals(10, histogram.getValueAtQuantile(0.0));
+        assertTrue(histogram.getValueAtQuantile(0.5) >= 2047);
+    }
+
+
+    /**
+     * Test the clone of a subclass keeps its class and is independent.
+     */
+    @Test
+    public void testCloneOfSubclass() {
+        PercentileHistogram histogram = new PercentileHistogram(4 * GB) {
+            private static final long serialVersionUID = 1L;
+        };
+        histogram.add(GB);
+
+        PercentileHistogram clone = histogram.clone();
+        assertEquals(histogram.getClass(), clone.getClass());
+        assertEquals(histogram, clone);
+
+        clone.add(2 * GB);
+        assertEquals(1, histogram.getCount());
+        assertEquals(2, clone.getCount());
+        assertEquals(GB, histogram.getValueAtQuantile(1.0));
     }
 }

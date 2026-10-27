@@ -14,6 +14,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -503,5 +505,236 @@ public class StatisticCounterTest {
         // lock is functional after deserialization
         restored.add(40L);
         assertEquals(4, restored.getCounter());
+    }
+
+
+    /**
+     * Test that data serialized with version 1.1.0 (no mean and m2 fields) is restored with average and deviation
+     *
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testDeserializeVersion110() throws Exception {
+        StatisticCounter original = new StatisticCounter();
+        original.add(10L);
+        original.add(20L);
+        original.add(60L);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+            oos.writeObject(original);
+        }
+
+        StatisticCounter restored;
+        try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(toVersion110Stream(bos.toByteArray())))) {
+            restored = (StatisticCounter) ois.readObject();
+        }
+
+        assertEquals(3, restored.getCounter());
+        assertEquals(90d, restored.getSum(), DELTA);
+        assertEquals(30d, restored.getAverage(), DELTA);
+        assertEquals(original.getVariance(), restored.getVariance(), DELTA);
+        assertEquals(original.getStandardDeviation(), restored.getStandardDeviation(), DELTA);
+        assertEquals(original, restored);
+
+        // the restored instance continues the statistic correctly
+        restored.add(30L);
+        original.add(30L);
+        assertEquals(original.getAverage(), restored.getAverage(), DELTA);
+        assertEquals(original.getVariance(), restored.getVariance(), DELTA);
+    }
+
+
+    /**
+     * Converts a serialized {@link StatisticCounter} into the format of version 1.1.0: the fields {@code mean}
+     * and {@code m2} are removed from the class descriptor and from the data. The primitive fields are written
+     * sorted by name: counter, m2, max, mean, min, squareSum, sum.
+     *
+     * @param data the serialized data
+     * @return the serialized data in the format of version 1.1.0
+     */
+    private static byte[] toVersion110Stream(byte[] data) {
+        final int doubleSize = 8;
+        final int counterIndex = indexOf(data, fieldDescriptor('J', "counter"));
+        final byte[] m2Descriptor = fieldDescriptor('D', "m2");
+        final int m2Index = indexOf(data, m2Descriptor);
+        final byte[] meanDescriptor = fieldDescriptor('D', "mean");
+        final int meanIndex = indexOf(data, meanDescriptor);
+        final byte[] sumDescriptor = fieldDescriptor('D', "sum");
+        final int dataStart = indexOf(data, sumDescriptor) + sumDescriptor.length + 2; // TC_ENDBLOCKDATA and TC_NULL (no super class)
+        assertTrue(counterIndex > 0 && m2Index > 0 && meanIndex > 0);
+        assertEquals((byte) 0x78, data[dataStart - 2]);
+        assertEquals((byte) 0x70, data[dataStart - 1]);
+        assertEquals(7, data[counterIndex - 1]); // number of fields
+
+        boolean[] skip = new boolean[data.length];
+        markSkip(skip, m2Index, m2Descriptor.length);
+        markSkip(skip, meanIndex, meanDescriptor.length);
+        markSkip(skip, dataStart + doubleSize, doubleSize); // m2
+        markSkip(skip, dataStart + 3 * doubleSize, doubleSize); // mean
+
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        for (int i = 0; i < data.length; i++) {
+            if (i == counterIndex - 1) {
+                result.write(5); // number of fields of version 1.1.0
+            } else if (!skip[i]) {
+                result.write(data[i]);
+            }
+        }
+        return result.toByteArray();
+    }
+
+
+    /**
+     * Creates the serialized descriptor of a primitive field: type code and the name in modified UTF-8.
+     *
+     * @param typeCode the type code
+     * @param name the field name
+     * @return the field descriptor
+     */
+    private static byte[] fieldDescriptor(char typeCode, String name) {
+        byte[] nameBytes = name.getBytes(StandardCharsets.US_ASCII);
+        byte[] result = new byte[3 + nameBytes.length];
+        result[0] = (byte) typeCode;
+        result[1] = 0;
+        result[2] = (byte) nameBytes.length;
+        System.arraycopy(nameBytes, 0, result, 3, nameBytes.length);
+        return result;
+    }
+
+
+    /**
+     * Find the first index of the pattern
+     *
+     * @param data the data
+     * @param pattern the pattern
+     * @return the index or -1
+     */
+    private static int indexOf(byte[] data, byte[] pattern) {
+        for (int i = 0; i <= data.length - pattern.length; i++) {
+            boolean found = true;
+            for (int j = 0; j < pattern.length && found; j++) {
+                found = data[i + j] == pattern[j];
+            }
+
+            if (found) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+
+    /**
+     * Mark a range to skip
+     *
+     * @param skip the skip flags
+     * @param start the start index
+     * @param length the length
+     */
+    private static void markSkip(boolean[] skip, int start, int length) {
+        for (int i = start; i < start + length; i++) {
+            skip[i] = true;
+        }
+    }
+
+
+    /**
+     * Test that concurrent symmetric equals calls with active writers do not deadlock and that equals and hashCode are consistent.
+     *
+     * @throws InterruptedException in case of interrupt
+     */
+    @Test
+    public void testConcurrentEqualsNoDeadlock() throws InterruptedException {
+        final StatisticCounter a = new StatisticCounter();
+        final StatisticCounter b = new StatisticCounter();
+        final AtomicBoolean failed = new AtomicBoolean(false);
+        final int loops = 20_000;
+
+        Thread[] threads = new Thread[] {
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    a.equals(b);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    b.equals(a);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    a.add(i);
+                }
+            }),
+            new Thread(() -> {
+                for (int i = 0; i < loops; i++) {
+                    b.add(i * 2);
+                }
+            })
+        };
+
+        for (Thread t : threads) {
+            t.setDaemon(true);
+            t.start();
+        }
+        for (Thread t : threads) {
+            t.join(30_000L);
+            if (t.isAlive()) {
+                failed.set(true);
+            }
+        }
+        assertTrue(!failed.get(), "equals deadlocked");
+
+        StatisticCounter c = new StatisticCounter();
+        StatisticCounter d = new StatisticCounter();
+        for (int i = 0; i < 100; i++) {
+            c.add(i);
+            d.add(i);
+        }
+        assertEquals(c, d);
+        assertEquals(c.hashCode(), d.hashCode());
+        assertEquals(c, c.clone());
+        assertEquals(c.hashCode(), c.clone().hashCode());
+    }
+
+
+    /**
+     * A not finite value is ignored
+     */
+    @Test
+    public void testNotFiniteValueIsIgnored() {
+        StatisticCounter c = new StatisticCounter();
+        c.add(10);
+        c.add(Double.NaN);
+        c.add(Double.POSITIVE_INFINITY);
+        c.add(Double.NEGATIVE_INFINITY);
+        c.add(20);
+        assertEquals(2, c.getCounter());
+        assertEquals(15.0, c.getAverage(), 0.0001);
+        assertEquals(30.0, c.getSum(), 0.0001);
+        assertEquals(10.0, c.getMinValue(), 0.0001);
+        assertEquals(20.0, c.getMaxValue(), 0.0001);
+    }
+
+
+    /**
+     * The clone of a subclass keeps its class and is independent of the original.
+     */
+    @Test
+    public void testCloneOfSubclass() {
+        StatisticCounter counter = new StatisticCounter() {
+            private static final long serialVersionUID = 1L;
+        };
+        counter.add(2L);
+
+        StatisticCounter clone = counter.clone();
+        assertEquals(counter.getClass(), clone.getClass());
+        assertEquals(counter, clone);
+
+        clone.add(4L);
+        assertEquals(1, counter.getCounter());
+        assertEquals(2, clone.getCounter());
+        assertNotEquals(counter, clone);
     }
 }

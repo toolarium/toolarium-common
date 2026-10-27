@@ -71,7 +71,7 @@ public final class TextUtil {
      * @return the prepared string
      */
     public StringBuilder prepareInput(StringBuilder input) {
-        if (input != null && !input.toString().isEmpty() /* TODO: after java 1.8 support !input.isEmpty()*/) {
+        if (input != null && input.length() > 0) {
             return input;
         }
         
@@ -170,50 +170,57 @@ public final class TextUtil {
             return builder;
         }
         
+        // any sequence of whitespace characters separates two words; a line holds at most maxTextLen characters
         StringBuilder data = new StringBuilder();
-        StringTokenizer st = new StringTokenizer(prepareInput(inputText).toString(), " \t\n\r\f", true);
+        StringTokenizer st = new StringTokenizer(prepareInput(inputText).toString(), " \t\n\r\f");
         while (st.hasMoreTokens()) {
             String d = st.nextToken();
-            if ((data.length() + d.length()) >= maxTextLen) {
-                if (!data.toString().isEmpty()) {
-                    builder.append(data);
-                    if (data.length() < maxTextLen) {
-                        builder.append(StringUtil.getInstance().newString(SPACE, maxTextLen - data.length()));
-                    }
+            if ((data.length() + d.length()) > maxTextLen) {
+                if (data.length() > 0) {
+                    appendLine(builder, data, maxTextLen);
                     builder.append(NL).append(subIndent);
                 }
-                
-                data = new StringBuilder();
+
                 d = StringUtil.getInstance().trimLeft(d);
-                
-                while (d.length() > maxTextLen) {
-                    data.append(d.substring(0, maxTextLen));
-                    builder.append(data).append(NL).append(subIndent);
-                    data = new StringBuilder();
-                    d = d.substring(maxTextLen);
+
+                // split a long word into lines by offset, without copying the remainder (linear runtime)
+                int pos = 0;
+                while (d.length() - pos > maxTextLen) {
+                    builder.append(d, pos, pos + maxTextLen).append(NL).append(subIndent);
+                    pos += maxTextLen;
                 }
-                
-                data = new StringBuilder().append(d);
+
+                data = new StringBuilder().append(d, pos, d.length());
             } else {
                 data.append(d);
             }
-            
+
+            // words are separated by one space
             if (st.hasMoreTokens()) {
-                String sep = st.nextToken();
-                if (SPACE.equals(sep)) {
-                    data.append(sep);
-                }
+                data.append(SPACE);
             }
         }
-        
-        if (!data.toString().isEmpty()) {
-            builder.append(data);
-            if (data.length() < maxTextLen) {
-                builder.append(StringUtil.getInstance().newString(SPACE, maxTextLen - data.length()));
-            }
+
+        if (data.length() > 0) {
+            appendLine(builder, data, maxTextLen);
         }
-        
+
         return builder;
+    }
+
+
+    /**
+     * Append a line and pad it with spaces up to the max length
+     *
+     * @param builder the builder to append to
+     * @param line the line
+     * @param maxTextLen the max len of the text
+     */
+    private void appendLine(StringBuilder builder, StringBuilder line, int maxTextLen) {
+        builder.append(line);
+        if (line.length() < maxTextLen) {
+            builder.append(StringUtil.getInstance().newString(SPACE, maxTextLen - line.length()));
+        }
     }
 
 
@@ -229,7 +236,8 @@ public final class TextUtil {
             return new StringBuilder();
         }
         
-        StringBuilder titleBuidler = prepareInput(inputTitle);
+        // work on a copy, the title of the caller is never modified
+        StringBuilder titleBuidler = new StringBuilder(prepareInput(inputTitle));
         if (maxTitelLen < titleBuidler.length()) {
             titleBuidler = new StringBuilder(titleBuidler.substring(0, maxTitelLen));
         } else {

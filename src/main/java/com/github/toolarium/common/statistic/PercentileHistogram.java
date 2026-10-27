@@ -6,8 +6,12 @@
 package com.github.toolarium.common.statistic;
 
 import java.io.IOException;
+import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -19,13 +23,16 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>Each power-of-two range [2^e, 2^(e+1)) is split into {@value #SUB_BUCKET_COUNT} equal sub-buckets,
  * values below {@code 2 * SUB_BUCKET_COUNT} are counted exactly. A percentile is reported as the middle
  * of the bucket that contains the sample of the requested rank (nearest-rank method), clamped to the exact
- * minimum and maximum. The reported value therefore differs from the exact percentile by at most
- * half a bucket width, i.e. less than 0.1% of the value; a constant series is reported exactly.</p>
+ * minimum and maximum. The lowest rank (e.g. P0) is reported as the exact minimum and the highest rank (P100) as
+ * the exact maximum. The reported value therefore differs from the exact percentile by at most
+ * half a bucket width, i.e. less than 0.1% of the value; a constant series is reported exactly.
+ * The rank of a quantile is calculated from its decimal value, e.g. P7 of 100 values is the 7th value.</p>
  *
  * <p>Memory is controlled by the number of ranges: range 0 costs 16 KB; each additional range costs 8 KB.
  * The default (~304 KB) covers values up to {@link #MAX_VALUE}.
  * Use {@link #PercentileHistogram(long)} to cap memory by passing the maximum value you expect to measure;
- * values that exceed the configured maximum are clamped to the last bucket rather than rejected.</p>
+ * values that exceed the configured maximum are clamped to the last bucket rather than rejected. Such values are
+ * reported with the precision of the last bucket, except the maximum (P100) which is always reported exactly.</p>
  *
  * <p>The individual methods are protected by a {@link ReadWriteLock}: concurrent reads run in
  * parallel; writes ({@link #add} and {@link #clear}) are exclusive. Atomicity across multiple calls
@@ -46,10 +53,11 @@ public class PercentileHistogram implements Cloneable, Serializable {
     private static final long serialVersionUID = -4158902551244137440L;
     private static final int SUB_BUCKET_BITS = 10;
     private static final int EXACT_LIMIT = 2 * SUB_BUCKET_COUNT;
+    private static final Object TIE_LOCK = new Object();
 
     private transient ReadWriteLock lock = new ReentrantReadWriteLock();
     private final int rangeCount;
-    private final long[][] counts;
+    private long[][] counts;
     private long totalCount;
     private long min;
     private long max;
@@ -61,21 +69,6 @@ public class PercentileHistogram implements Cloneable, Serializable {
      */
     public PercentileHistogram() {
         this(MAX_VALUE);
-    }
-
-
-    /**
-     * Private constructor used by {@link #clone()} to create a histogram with a pre-determined
-     * range count, bypassing {@link #rangesFor(long)} and skipping lock-based initialisation.
-     *
-     * @param rangeCount the exact number of ranges to allocate
-     */
-    private PercentileHistogram(int rangeCount) {
-        this.rangeCount = rangeCount;
-        this.counts = new long[rangeCount][];
-        this.totalCount = 0;
-        this.min = Long.MAX_VALUE;
-        this.max = Long.MIN_VALUE;
     }
 
 
@@ -184,8 +177,10 @@ public class PercentileHistogram implements Cloneable, Serializable {
 
     /**
      * Returns the number of ranges required to cover {@code maxValue} at full precision.
-     * Use this to avoid computing the range count manually:
-     * <pre>new PercentileHistogram(PercentileHistogram.rangesFor(16L * 1024 * 1024 * 1024))</pre>
+     * Use this to compute the memory footprint for a given maximum value up front, e.g. for 16 GB:
+     * <pre>int footprintKB = 16 + (PercentileHistogram.rangesFor(16L * 1024 * 1024 * 1024) - 1) * 8;</pre>
+     * Note that the constructor {@link #PercentileHistogram(long)} expects the maximum value itself, not the range count:
+     * <pre>new PercentileHistogram(16L * 1024 * 1024 * 1024)</pre>
      *
      * @param maxValue the maximum value to cover, must not be negative
      * @return the required number of ranges
@@ -234,7 +229,7 @@ public class PercentileHistogram implements Cloneable, Serializable {
      * @throws IllegalArgumentException if a quantile is not between 0 and 1 or the quantiles are not ascending
      */
     public long[] getValuesAtQuantiles(double... quantiles) {
-        // validate before acquiring the lock — no shared state read here
+        // validate before acquiring the lock: no shared state is read here
         for (int i = 0; i < quantiles.length; i++) {
             double q = quantiles[i];
             if (Double.isNaN(q) || q < 0 || q > 1) {
@@ -255,7 +250,7 @@ public class PercentileHistogram implements Cloneable, Serializable {
             // compute ranks inside the lock so they are consistent with the counts being scanned
             long[] ranks = new long[quantiles.length];
             for (int i = 0; i < quantiles.length; i++) {
-                ranks[i] = Math.max(1, (long) Math.ceil(quantiles[i] * totalCount));
+                ranks[i] = rank(quantiles[i], totalCount);
             }
 
             int next = 0;
@@ -269,7 +264,15 @@ public class PercentileHistogram implements Cloneable, Serializable {
                 for (int sub = 0; sub < bucket.length && next < ranks.length; sub++) {
                     cumulative += bucket[sub];
                     while (next < ranks.length && cumulative >= ranks[next]) {
-                        result[next] = clamp(representativeValue(range, sub));
+                        if (ranks[next] >= totalCount) {
+                            // the highest rank is the exact maximum, also if it exceeds the configured range
+                            result[next] = max;
+                        } else if (ranks[next] <= 1) {
+                            // the lowest rank is the exact minimum
+                            result[next] = min;
+                        } else {
+                            result[next] = clamp(representativeValue(range, sub));
+                        }
                         next++;
                     }
                 }
@@ -314,16 +317,23 @@ public class PercentileHistogram implements Cloneable, Serializable {
         }
 
         PercentileHistogram other = (PercentileHistogram) obj;
+        if (rangeCount != other.rangeCount) {
+            return false;
+        }
 
-        // read locks can be held by multiple threads simultaneously — no ordering trick needed
-        lock.readLock().lock();
-        other.lock.readLock().lock();
-        try {
-            return rangeCount == other.rangeCount && totalCount == other.totalCount
-                    && min == other.min && max == other.max && Arrays.deepEquals(counts, other.counts);
-        } finally {
-            other.lock.readLock().unlock();
-            lock.readLock().unlock();
+        // both read locks are held while comparing; they are always acquired in the same global order
+        // (identity hash code) to avoid a deadlock between a.equals(b) and b.equals(a) with queued writers
+        int thisHash = System.identityHashCode(this);
+        int otherHash = System.identityHashCode(other);
+        if (thisHash < otherHash) {
+            return equalsUnderLock(this, other);
+        } else if (thisHash > otherHash) {
+            return equalsUnderLock(other, this);
+        } else {
+            // rare hash collision: serialize such comparisons with a global tie lock
+            synchronized (TIE_LOCK) {
+                return equalsUnderLock(this, other);
+            }
         }
     }
 
@@ -351,8 +361,9 @@ public class PercentileHistogram implements Cloneable, Serializable {
 
 
     /**
-     * Creates a deep-copy snapshot of this histogram. The clone has its own independent lock
-     * and counts array; subsequent writes to either instance do not affect the other.
+     * Creates a deep-copy snapshot of this histogram with the same runtime class (also of a subclass). The clone
+     * has its own independent lock and counts array; subsequent writes to either instance do not affect the other.
+     * The fields of a subclass are copied shallow, a subclass with mutable state has to override this method to copy it.
      *
      * @return a deep copy of this histogram
      * @see java.lang.Object#clone()
@@ -361,16 +372,18 @@ public class PercentileHistogram implements Cloneable, Serializable {
     public PercentileHistogram clone() {
         lock.readLock().lock();
         try {
-            PercentileHistogram inst = new PercentileHistogram(rangeCount);
+            PercentileHistogram inst = (PercentileHistogram) super.clone();
+            inst.lock = new ReentrantReadWriteLock();
+            inst.counts = new long[rangeCount][];
             for (int i = 0; i < rangeCount; i++) {
                 if (counts[i] != null) {
                     inst.counts[i] = Arrays.copyOf(counts[i], counts[i].length);
                 }
             }
-            inst.totalCount = totalCount;
-            inst.min = min;
-            inst.max = max;
             return inst;
+        } catch (CloneNotSupportedException e) {
+            // can not happen, the class implements Cloneable
+            throw new IllegalStateException(e);
         } finally {
             lock.readLock().unlock();
         }
@@ -378,15 +391,127 @@ public class PercentileHistogram implements Cloneable, Serializable {
 
 
     /**
-     * Restores the transient lock after deserialization.
+     * Compares the state of two histograms with the same range count while holding the read lock of both.
+     * The locks are acquired in the given order.
+     *
+     * @param first the histogram which is locked first
+     * @param second the histogram which is locked second
+     * @return true if both histograms contain the same values
+     */
+    private static boolean equalsUnderLock(PercentileHistogram first, PercentileHistogram second) {
+        first.lock.readLock().lock();
+        try {
+            second.lock.readLock().lock();
+            try {
+                return first.totalCount == second.totalCount
+                        && first.min == second.min
+                        && first.max == second.max
+                        && Arrays.deepEquals(first.counts, second.counts);
+            } finally {
+                second.lock.readLock().unlock();
+            }
+        } finally {
+            first.lock.readLock().unlock();
+        }
+    }
+
+
+    /**
+     * Writes the state under the read lock, so that a consistent snapshot is serialized.
+     *
+     * @param out the object output stream
+     * @throws IOException if an I/O error occurs
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        lock.readLock().lock();
+        try {
+            out.defaultWriteObject();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+
+    /**
+     * Restores the transient lock after deserialization and validates the invariants of the read state.
      *
      * @param in the object input stream
      * @throws IOException if an I/O error occurs
+     * @throws InvalidObjectException if the read state is corrupt
      * @throws ClassNotFoundException if the class cannot be found
      */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
+        validateState();
         lock = new ReentrantReadWriteLock();
+    }
+
+
+    /**
+     * Validates the invariants of the state, used after deserialization.
+     *
+     * @throws InvalidObjectException if the state is corrupt
+     */
+    private void validateState() throws InvalidObjectException {
+        if (rangeCount < 1 || rangeCount > DEFAULT_RANGE_COUNT) {
+            throw new InvalidObjectException("Invalid range count: " + rangeCount);
+        }
+        if (counts == null || counts.length != rangeCount) {
+            throw new InvalidObjectException("Invalid number of ranges.");
+        }
+
+        long sum = 0;
+        for (int range = 0; range < rangeCount; range++) {
+            long[] bucket = counts[range];
+            if (bucket == null) {
+                continue;
+            }
+
+            int expectedSize = SUB_BUCKET_COUNT;
+            if (range == 0) {
+                expectedSize = EXACT_LIMIT;
+            }
+            if (bucket.length != expectedSize) {
+                throw new InvalidObjectException("Invalid bucket size in range " + range + ": " + bucket.length);
+            }
+
+            for (long count : bucket) {
+                if (count < 0) {
+                    throw new InvalidObjectException("Negative bucket count in range " + range + ".");
+                }
+                try {
+                    sum = Math.addExact(sum, count);
+                } catch (ArithmeticException e) {
+                    throw new InvalidObjectException("Bucket counts overflow.", e);
+                }
+            }
+        }
+
+        if (sum != totalCount) {
+            throw new InvalidObjectException("Total count " + totalCount + " does not match the bucket counts " + sum + ".");
+        }
+
+        if (totalCount == 0) {
+            if (min != Long.MAX_VALUE || max != Long.MIN_VALUE) {
+                throw new InvalidObjectException("Invalid min / max of an empty histogram.");
+            }
+        } else if (min < 0 || min > max) {
+            throw new InvalidObjectException("Invalid min / max: " + min + " / " + max);
+        }
+    }
+
+
+    /**
+     * Calculates the rank of a quantile with the nearest-rank method. The quantile is used with its decimal value,
+     * so that e.g. the quantile 0.07 of 100 values is the rank 7 and not 8 because of the binary floating point value.
+     *
+     * @param quantile the quantile between 0 and 1
+     * @param count the number of values, must be positive
+     * @return the rank between 1 and count
+     */
+    static long rank(double quantile, long count) {
+        long rank = BigDecimal.valueOf(quantile).multiply(BigDecimal.valueOf(count)).setScale(0, RoundingMode.CEILING).longValue();
+        return Math.min(count, Math.max(1L, rank));
     }
 
 

@@ -5,6 +5,7 @@
  */
 package com.github.toolarium.common.version;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,10 +13,12 @@ import java.util.List;
 
 /**
  * The version base class
- * 
+ *
+ * @param <T> the concrete version type
  * @author patrick
  */
-public abstract class AbstractVersion<T> {
+public abstract class AbstractVersion<T> implements Serializable {
+    private static final long serialVersionUID = -4790474416183251620L;
     private final String originalVersion;
     private final VersionType versionType;
     private final String versionStr;
@@ -35,9 +38,9 @@ public abstract class AbstractVersion<T> {
     
 
     /**
-     * Get the versoon type
+     * Get the version type
      *
-     * @return the versoon type
+     * @return the version type
      */
     public VersionType getType() {
         return versionType;
@@ -48,7 +51,7 @@ public abstract class AbstractVersion<T> {
      * Get the major part of the version.
      * Example: for "1.2.3" = 1
      *
-     * @return the major part of the version
+     * @return the major part of the version or -1 if it is not set
      */
     protected abstract int getMajorNumber();
 
@@ -57,7 +60,7 @@ public abstract class AbstractVersion<T> {
      * Get the minor part of the version.
      * Example: for "1.2.3" = 2
      *
-     * @return the minor part of the version
+     * @return the minor part of the version or -1 if it is not set
      */
     protected abstract int getMinorNumber();
     
@@ -66,12 +69,14 @@ public abstract class AbstractVersion<T> {
      * Get the patch part of the version.
      * Example: for "1.2.3" = 3
      *
-     * @return the patch part of the version
+     * @return the patch part of the version or -1 if it is not set
      */
     protected abstract int getPatchNumber();
 
     
     /**
+     * Compares the version string. Versions of different classes are never equal.
+     *
      * @see java.lang.Object#equals(java.lang.Object)
      */
     @Override
@@ -79,8 +84,8 @@ public abstract class AbstractVersion<T> {
         if (this == o) {
             return true;
         }
-        
-        if (!(o instanceof AbstractVersion)) {
+
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
         
@@ -109,7 +114,7 @@ public abstract class AbstractVersion<T> {
 
     
     /**
-     * Sort the version list
+     * Sort the version list in descending order: the highest version comes first.
      *
      * @param <T> the generic type
      * @param list the list to sort
@@ -138,7 +143,7 @@ public abstract class AbstractVersion<T> {
      * @param <T> the generic type
      * @param list the list of versions to filter
      * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
-     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param majorThreshold the major threshold, the number of major element to keep (0 or less keeps no version: filter returns an empty list, invertFilter all versions)
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @return the version list
@@ -154,7 +159,7 @@ public abstract class AbstractVersion<T> {
      * @param <T> the generic type
      * @param list the list of versions to filter
      * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
-     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param majorThreshold the major threshold, the number of major element to keep (0 or less keeps no version: filter returns an empty list, invertFilter all versions)
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @param previousMajorMinorThreshold the minor version number threshold of previous major version
@@ -183,7 +188,7 @@ public abstract class AbstractVersion<T> {
      *
      * @param <T> the generic type
      * @param list the list of versions to filter
-     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param majorThreshold the major threshold, the number of major element to keep (0 or less keeps no version: filter returns an empty list, invertFilter all versions)
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @return the version list
@@ -198,7 +203,7 @@ public abstract class AbstractVersion<T> {
      *
      * @param <T> the generic type
      * @param list the list of versions to filter
-     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param majorThreshold the major threshold, the number of major element to keep (0 or less keeps no version: filter returns an empty list, invertFilter all versions)
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @param previousMajorMinorThreshold the minor version number threshold of previous major version
@@ -216,7 +221,7 @@ public abstract class AbstractVersion<T> {
      * @param <T> the generic type
      * @param list the list of versions to filter
      * @param majorMinorMaxCount defines the max of major / minor should be returned back, default is no limitation
-     * @param majorThreshold the major threshold, the number of major element to keep
+     * @param majorThreshold the major threshold, the number of major element to keep (0 or less keeps no version: filter returns an empty list, invertFilter all versions)
      * @param minorThreshold the minor threshold, the number of minor element to keep
      * @param patchThreshold the patch threshold, the number of patch element to keep
      * @param previousMajorMinorThreshold the minor version number threshold of previous major version
@@ -233,6 +238,16 @@ public abstract class AbstractVersion<T> {
                                                                          int previousMajorPatchThreshold, 
                                                                          boolean invertFilter) {
         List<T> filteredVersions = new ArrayList<T>();
+        if (majorThreshold <= 0) {
+            // no major version is kept: the filter is empty, the inverted filter contains all versions
+            if (invertFilter) {
+                filteredVersions.addAll(list);
+                Collections.sort(filteredVersions, Collections.reverseOrder());
+            }
+
+            return filteredVersions;
+        }
+
         int majorVersionCount = 0;
         int minorVersionCount = 0;
         int patchVersionCount = 0;
@@ -326,6 +341,8 @@ public abstract class AbstractVersion<T> {
                     if (!invertFilter) {
                         filteredVersions.add(version);
                     }
+                } else if (invertFilter) {
+                    filteredVersions.add(version);
                 }
             }
             
@@ -411,14 +428,56 @@ public abstract class AbstractVersion<T> {
                 }
             }
             
+            if (!isAsciiNumber(value[idx])) {
+                return parseWildcard(versionType, value, idx, errorDetailMessage);
+            }
+
             return Integer.valueOf(value[idx]);
         } catch (NumberFormatException e) {
-            if (idx == 0 || (versionType != VersionType.NPM || (!"x".equalsIgnoreCase(value[idx - 1]) && !"*".equals(value[idx - 1])))) {
-                throwInvalidVersion(true, errorDetailMessage);
-            }
-            
-            return null;
+            return parseWildcard(versionType, value, idx, errorDetailMessage);
         }
+    }
+
+
+    /**
+     * Handles a version part which is not a number: only in case of {@link VersionType#NPM} a wildcard
+     * ({@code x}, {@code X} or {@code *}) is accepted for all parts except the major part.
+     *
+     * @param versionType the version type
+     * @param value the value
+     * @param idx the index
+     * @param errorDetailMessage the error detail message or null
+     * @return null in case of an accepted wildcard
+     * @throws IllegalArgumentException the exception which will be thrown of an invalid input
+     */
+    private Integer parseWildcard(VersionType versionType, String[] value, int idx, String errorDetailMessage) throws IllegalArgumentException {
+        if (idx == 0 || (versionType != VersionType.NPM || (!"x".equalsIgnoreCase(value[idx]) && !"*".equals(value[idx])))) {
+            throwInvalidVersion(true, errorDetailMessage);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Checks if the value is not empty and consists only of the ASCII digits 0 to 9.
+     *
+     * @param value the value
+     * @return true if the value is an ASCII number
+     */
+    private static boolean isAsciiNumber(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+
+        for (int i = 0; i < value.length(); i++) {
+            final char c = value.charAt(i);
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     

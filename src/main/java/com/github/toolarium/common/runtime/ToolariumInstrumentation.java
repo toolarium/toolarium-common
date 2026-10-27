@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Utility to optionally access the toolarium-java-agent's {@link Instrumentation} instance
  * when the agent is loaded via {@code -javaagent:}. All methods degrade gracefully when the
- * agent is absent — no hard compile dependency on the agent jar is required.
+ * agent is absent: no hard compile dependency on the agent jar is required.
  *
  * @author patrick
  */
@@ -37,7 +37,7 @@ public final class ToolariumInstrumentation {
      * Constructor
      */
     private ToolariumInstrumentation() {
-        instrumentation = resolveInstrumentation();
+        instrumentation = resolveInstrumentation(AGENT_CLASS);
     }
 
 
@@ -73,23 +73,25 @@ public final class ToolariumInstrumentation {
 
 
     /**
-     * Reflectively resolve the {@link Instrumentation} from the agent class.
+     * Reflectively resolve the {@link Instrumentation} from the agent class. A {@link LinkageError} while loading
+     * or initializing the agent class (e.g. {@link NoClassDefFoundError}) is handled as "not available".
      *
+     * @param agentClassName the name of the agent class
      * @return the instrumentation or {@code null}
      */
-    private Instrumentation resolveInstrumentation() {
-        if (!ReflectionUtil.getInstance().isClassAvailable(AGENT_CLASS)) {
-            LOG.debug("toolarium-java-agent not found on classpath, instrumentation not available.");
-            return null;
-        }
-
+    static Instrumentation resolveInstrumentation(String agentClassName) {
         try {
-            Object result = ReflectionUtil.getInstance().callMethod(null, AGENT_CLASS, "getInstrumentation", null, null);
+            if (!ReflectionUtil.getInstance().isClassAvailable(agentClassName)) {
+                LOG.debug("toolarium-java-agent not found on classpath, instrumentation not available.");
+                return null;
+            }
+
+            Object result = ReflectionUtil.getInstance().callMethod(null, agentClassName, "getInstrumentation", null, null);
             if (result instanceof Instrumentation) {
                 LOG.debug("toolarium-java-agent instrumentation available.");
                 return (Instrumentation) result;
             }
-        } catch (Exception e) {
+        } catch (LinkageError | Exception e) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Failed to access toolarium-java-agent instrumentation: " + e.getMessage(), e);
             }

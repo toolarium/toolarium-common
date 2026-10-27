@@ -72,32 +72,40 @@ public final class RegularExpressionUtil {
     /**
      * Compiles the given regular expression pattern. Results are cached so that
      * repeated compilations of the same pattern string are avoided.
-     * On cache hit the entry is promoted to most recently used.
+     * On cache hit the entry is promoted to most recently used. The regular expression is compiled as given,
+     * leading and trailing whitespace is part of the pattern.
      *
      * @param regex the regular expression to compile
      * @return the compiled pattern
      * @throws IllegalArgumentException if the regex is null, empty, or has invalid syntax
      */
     public Pattern compile(String regex) {
-        if (regex == null || regex.trim().isEmpty()) {
+        if (regex == null || regex.isEmpty()) {
             throw new IllegalArgumentException("Regular expression must not be null or empty!");
         }
 
-        String trimmed = regex.trim();
-
         synchronized (cache) {
-            Pattern pattern = cache.get(trimmed);
+            Pattern pattern = cache.get(regex);
             if (pattern != null) {
                 return pattern;
             }
+        }
 
-            try {
-                pattern = Pattern.compile(trimmed);
-            } catch (PatternSyntaxException e) {
-                throw new IllegalArgumentException("Invalid regex pattern: " + e.getMessage(), e);
+        // compile outside of the lock; the regex is compiled as given (whitespace is significant)
+        Pattern pattern;
+        try {
+            pattern = Pattern.compile(regex);
+        } catch (PatternSyntaxException e) {
+            throw new IllegalArgumentException("Invalid regex pattern: " + e.getMessage(), e);
+        }
+
+        synchronized (cache) {
+            Pattern existing = cache.get(regex);
+            if (existing != null) {
+                return existing;
             }
 
-            cache.put(trimmed, pattern);
+            cache.put(regex, pattern);
             return pattern;
         }
     }

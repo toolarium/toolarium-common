@@ -13,6 +13,8 @@ import java.util.SortedMap;
 /**
  * An object representing the differences between two sorted maps.
  *
+ * @param <K> the key type
+ * @param <V> the value type
  * @author patrick
  */
 public interface ISortedMapDifference<K, V> extends IMapDifference<K, V> {

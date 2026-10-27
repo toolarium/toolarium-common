@@ -13,16 +13,15 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.function.Consumer;
 
 
 /**
- * The StackInfo class is a collection of static methods to allow users to quickly determine the call stack. 
- * This class makes it possible to determine what class called a method and what text files and line numbers 
- * resulted in stack calls. The StackInfo calls will not appear in return string. 
- * By calling the method getTrace a 2D-String-Array is returned.
+ * The StackTrace class is a collection of static methods to allow users to quickly determine the call stack.
+ * This class makes it possible to determine what class called a method and what text files and line numbers
+ * resulted in stack calls. The StackTrace calls will not appear in the result.
+ * By calling the method {@link #getStackTraceElements()} an array of {@link StackTraceElement} is returned.
  * 
  * @author patrick
  */
@@ -108,15 +107,17 @@ public final class StackTrace {
      * @return the stack trace
      */
     public static String getStackTrace(int traceSize) {
-        StackTraceElement[] elements = getStackTraceElements(traceSize);
+        // the own frames are filtered first, so that the trace size counts only the frames of the caller
+        StackTraceElement[] elements = getStackTraceElements(-1);
         StringBuilder buffer = new StringBuilder();
 
         boolean addNewline = false;
-
-        for (int i = 0; i < elements.length; i++) {
+        int count = 0;
+        for (int i = 0; i < elements.length && (traceSize <= 0 || count < traceSize); i++) {
             StackTraceElement element = elements[i];
 
-            if ((element != null) && (element.getClassName() != null && !element.getClassName().startsWith(where))) {
+            if ((element != null) && !isOwnFrame(element)) {
+                count++;
                 if (addNewline) {
                     buffer.append(System.getProperty("line.separator"));
                 } else {
@@ -193,13 +194,16 @@ public final class StackTrace {
             }
         }
         
+        boolean addNewline = false;
         for (int i = 0; i < elements.length; i++) {
             StackTraceElement element = elements[i];
             if (element != null && !filterStackTraceElement(filteredClassNames, element)) {
-                if (i > 0) {
+                if (addNewline) {
                     buffer.append(newline);
+                } else {
+                    addNewline = true;
                 }
-                
+
                 if (element.getHeader() == null && indentElement != null && !indentElement.isEmpty()) {
                     buffer.append(indentElement);
                 }
@@ -265,7 +269,7 @@ public final class StackTrace {
      * @param traceSize the size of the stack trace (default -1)
      */
     public static void processStackTrace(Consumer<String> consumer, List<String> filteredClassNames, String header, int traceSize) {
-        consumer.accept(getStackTrace(getStackTraceElements(3, traceSize), filteredClassNames, header));
+        consumer.accept(getStackTrace(getCallerStackTraceElements(traceSize), filteredClassNames, header));
     }
 
     
@@ -279,10 +283,54 @@ public final class StackTrace {
      * @param traceSize the size of the stack trace (default -1)
      */
     public static void processStackTrace(Consumer<String> consumer, List<String> filteredClassNames, String header, String newline, int traceSize) {
-        consumer.accept(getStackTrace(getStackTraceElements(3, traceSize), filteredClassNames, header, newline));
+        consumer.accept(getStackTrace(getCallerStackTraceElements(traceSize), filteredClassNames, header, newline));
     }
 
     
+    /**
+     * Get the stack trace elements of the caller: the frames of this class (and of the thread) are removed before
+     * the trace size is applied.
+     *
+     * @param traceSize the size of the stack trace (default -1)
+     * @return the stack trace elements of the caller
+     */
+    private static StackTraceElement[] getCallerStackTraceElements(int traceSize) {
+        StackTraceElement[] elements = getStackTraceElements(1, -1);
+        List<StackTraceElement> result = new ArrayList<StackTraceElement>();
+        for (int i = 0; i < elements.length && (traceSize <= 0 || result.size() < traceSize); i++) {
+            StackTraceElement element = elements[i];
+            if (element != null && !isOwnFrame(element)) {
+                result.add(element);
+            }
+        }
+
+        return result.toArray(new StackTraceElement[0]);
+    }
+
+
+    /**
+     * Check if the stack trace element is a frame of this class (or one of its inner classes). A prefix of the class name
+     * like the module or the class loader name (e.g. <code>module@version/</code> or <code>app//</code>) is ignored.
+     *
+     * @param element the stack trace element
+     * @return true if it is a frame of this class
+     */
+    static boolean isOwnFrame(StackTraceElement element) {
+        String className = element.getClassName();
+        if (className == null) {
+            return false;
+        }
+
+        // remove the module or class loader prefix, a class name never contains a slash
+        int idx = className.lastIndexOf('/');
+        if (idx >= 0) {
+            className = className.substring(idx + 1);
+        }
+
+        return className.equals(where) || className.startsWith(where + "$");
+    }
+
+
     /**
      * Filter the given trace elements as stack trace
      * 
@@ -318,20 +366,19 @@ public final class StackTrace {
     
     
     /**
-     * Parse the stack trace into the desired two dimensional string
+     * Parse the stack trace of the given exception into stack trace elements
      * 
      * @param t the exception
      * @param startTrace the start of the trace (default 2)
      * @param traceSize the stack trace size (default -1)
-     * @return a formated two dimensional string:
-     *         Each row representate a call on the stack and the columns
-     *         are formated like below:<BR>
+     * @return the parsed stack trace elements or null if the exception is null.
+     *         Each element represents a call on the stack and is structured like below:<BR>
      *         <UL>
-     *             <LI>member 0 : name of text file from which call was made
-     *             <LI>member 1 : line number of text file from which call was made
-     *             <LI>member 2 : method name of calling class
-     *             <LI>member 3 : name of calling class
-     *             <LI>member 4 : full package name of calling class
+     *             <LI>{@link StackTraceElement#getFileName()} : name of text file from which call was made
+     *             <LI>{@link StackTraceElement#getLineNumber()} : line number of text file from which call was made (-1 if unknown)
+     *             <LI>{@link StackTraceElement#getMethodName()} : method name of calling class
+     *             <LI>{@link StackTraceElement#getClassName()} : full qualified name of calling class (package and class name)
+     *             <LI>{@link StackTraceElement#getHeader()} : the line itself in case it is not a call, e.g. "Caused by ..." or "... 5 more"
      *         </UL>
      * @exception IOException in case of error
      */
@@ -347,23 +394,26 @@ public final class StackTrace {
 
     
     /**
-     * Parse the stack trace into the desired two dimensional string
+     * Parse the given stack trace text into stack trace elements
      * 
      * @param callStack the stack trace to parse
      * @param startIndex the start of the trace (default 2)
-     * @param traceSize the stack trace size (default -1)
-     * @return a formated two dimensional string:
-     *         Each row representate a call on the stack and the columns
-     *         are formated like below:<BR>
+     * @param traceSize the maximum number of returned elements (default -1 for all)
+     * @return the parsed stack trace elements or null if the call stack is null. Lines which can not be parsed are skipped.
+     *         Each element represents a call on the stack and is structured like below:<BR>
      *         <UL>
-     *             <LI>member 0 : name of text file from which call was made
-     *             <LI>member 1 : line number of text file from which call was made
-     *             <LI>member 2 : method name of calling class
-     *             <LI>member 3 : name of calling class
-     *             <LI>member 4 : full package name of calling class
+     *             <LI>{@link StackTraceElement#getFileName()} : name of text file from which call was made
+     *             <LI>{@link StackTraceElement#getLineNumber()} : line number of text file from which call was made (-1 if unknown)
+     *             <LI>{@link StackTraceElement#getMethodName()} : method name of calling class
+     *             <LI>{@link StackTraceElement#getClassName()} : full qualified name of calling class (package and class name)
+     *             <LI>{@link StackTraceElement#getHeader()} : the line itself in case it is not a call, e.g. "Caused by ..." or "... 5 more"
      *         </UL>
      */
     public static StackTraceElement[] parseStackTraceElements(String callStack, int startIndex, int traceSize) {
+        if (callStack == null) {
+            return null;
+        }
+
         List<String> stackLines = new ArrayList<String>();
         try (BufferedReader reader = new BufferedReader(new StringReader(callStack))) {
             String line = reader.readLine();
@@ -375,7 +425,6 @@ public final class StackTrace {
             // quit
         }
 
-        // the size of the stack is now know so the returnString can be initialized
         // first line is always java.lang.Throwable so we will not include that
         // the second line will always be getTraceElements so we will not include
         // that either
@@ -384,30 +433,21 @@ public final class StackTrace {
             startTrace = startIndex;
         }
 
-        int size = stackLines.size();
-        if ((traceSize > 0) && ((traceSize + startTrace + 1) <= stackLines.size())) {
-            size = traceSize + startTrace + 1;
-        }
-
-        if (startTrace > size) {
+        if (startTrace > stackLines.size()) {
             startTrace = 0;
         }
 
-        StackTraceElement[] stackTraceElements = new StackTraceElement[size - startTrace];
-
-        // parse each line of the stack trace and put it in the desired format &
-        // order remember that we are skipping the first line
-        int endTrace = size;
-        int pos = startTrace;
-        for (int i = startTrace; i < endTrace; i++) {
+        // parse each line of the stack trace, lines which can not be parsed are skipped
+        // and at most traceSize elements are returned (all if traceSize is not positive)
+        List<StackTraceElement> result = new ArrayList<StackTraceElement>();
+        for (int i = startTrace; i < stackLines.size() && (traceSize <= 0 || result.size() < traceSize); i++) {
             StackTraceElement e = parseStackTraceElement(stackLines.get(i));
             if (e != null) {
-                stackTraceElements[pos - startTrace] = e;
-                pos++;
+                result.add(e);
             }
         }
 
-        return stackTraceElements;
+        return result.toArray(new StackTraceElement[result.size()]);
     }
 
     
@@ -434,7 +474,7 @@ public final class StackTrace {
             header = line;
         } else if (line.indexOf("...") > 0 && line.indexOf(" more") > 0) {
             header = line;
-        } else if (line.indexOf("at ") < 0) {
+        } else if (!isStackTraceFrameLine(line)) {
             header = line;
         } else {
             String[] stackTraceLine = parseStackTraceLine(line);
@@ -475,7 +515,7 @@ public final class StackTrace {
      * member 4 : full package name of calling class
      * 
      * @param line a line from the stack trace
-     * @return a formated stack trace array:
+     * @return a formated stack trace array or null if the line is not a stack trace frame (its trimmed form must start with "at "):
      *         <UL>
      *             <LI>member 0 : name of text file from which call was made
      *             <LI>member 1 : line number of text file from which call was made
@@ -490,52 +530,37 @@ public final class StackTrace {
         if (line == null || line.trim().length() == 0) {
             return returnString;
         }
-        
-        int start;
-        int end;
 
-        // get the file name
-        start = line.indexOf("(") + 1;
-        end = line.indexOf(":");
-
-        if (start <= 1 || end < 0) {
-            end = line.lastIndexOf(")");
-
-            if (start < 0) {
-                start = 0;
-            }
-            if (end < 0) {
-                end = 0;
-            }
-            returnString[0] = line.substring(start, end);
-        } else {
-            if (start < 0) {
-                start = 0;
-            }
-            if (end < 0) {
-                end = 0;
-            }
-            if (start < end) {
-                returnString[0] = line.substring(start, end);
-            }
-            
-            // get the line number in the file
-            start = line.indexOf(":") + 1;
-            end = line.indexOf(")", start);
-
-            if (start < 0 || end < 0) {
-                returnString[1] = "";
-            } else {
-                returnString[1] = line.substring(start, end);
-            }
+        if (!isStackTraceFrameLine(line)) {
+            return null;
         }
 
         // get the package.class.method string
-        start = line.indexOf("at ") + 3;
-        end = line.indexOf("(", start);
+        int start = line.indexOf("at ") + 3;
+        int end = line.indexOf("(", start);
 
-        if (start < 0 || end < 0) {
+        if (start < 3 || end < 0) {
             return null;
+        }
+
+        // get the file name and the line number, only the text inside the parentheses is used
+        // to ignore a suffix like " ~[?:?]" which is added by some logging frameworks
+        int close = line.indexOf(")", end + 1);
+        String location;
+        if (close >= 0) {
+            location = line.substring(end + 1, close);
+        } else {
+            location = line.substring(end + 1);
+        }
+
+        int colon = location.lastIndexOf(':');
+        if (colon < 0) {
+            returnString[0] = location;
+        } else {
+            if (colon > 0) {
+                returnString[0] = location.substring(0, colon);
+            }
+            returnString[1] = location.substring(colon + 1);
         }
 
         // use tokenizer to count the periods to find the package name size
@@ -548,7 +573,7 @@ public final class StackTrace {
         // there may be no package name in which case package name will be a empty string
         returnString[4] = "";
 
-        if (packageLength != 0) {
+        if (packageLength > 0) {
             StringBuilder packageBuilder = new StringBuilder();
             for (int i = 0; i < packageLength; i++) {
                 if (packageBuilder.length() > 0) {
@@ -560,16 +585,27 @@ public final class StackTrace {
         }
 
         // get the class name
-        returnString[3] = st.nextToken();
+        if (st.hasMoreTokens()) {
+            returnString[3] = st.nextToken();
+        }
 
         // get the method name
-        try {
+        if (st.hasMoreTokens()) {
             returnString[2] = st.nextToken();
-        } catch (NoSuchElementException e) {
-            // NOP
         }
         
         return returnString;
+    }
+
+
+    /**
+     * Checks if a line is a stack trace frame line, i.e. its trimmed form starts with "at ".
+     *
+     * @param line the line
+     * @return true if it is a stack trace frame line
+     */
+    private static boolean isStackTraceFrameLine(String line) {
+        return line != null && line.trim().startsWith("at ");
     }
 
     
@@ -619,7 +655,7 @@ public final class StackTrace {
         }
         
         for (String s : filteredElementNames) {
-            if (e.getClassName() != null && e.getClassName().startsWith(s)) {
+            if (matchesFilter(s, e.getClassName(), null)) {
                 return true;
             }
         }
@@ -641,12 +677,55 @@ public final class StackTrace {
         }
         
         for (String s : filteredElementNames) {
-            if (e.getClassName() != null && e.getClassName().startsWith(s)) {
+            if (matchesFilter(s, e.getClassName(), e.getModuleName())) {
                 return true;
             }
         }
 
         return false;
     }
-}
 
+
+    /**
+     * Check if a class name matches a filter. A filter with a module prefix (e.g. <code>java.base/</code>) also matches
+     * a class name without module prefix in case the module is known or the package of the class belongs to that
+     * module of the boot layer.
+     *
+     * @param filter the filter
+     * @param className the class name, optional with a module prefix
+     * @param moduleName the module name or null if it is unknown
+     * @return true if the class name matches the filter
+     */
+    static boolean matchesFilter(String filter, String className, String moduleName) {
+        if (filter == null || className == null) {
+            return false;
+        }
+
+        if (className.startsWith(filter)) {
+            return true;
+        }
+
+        int filterIdx = filter.indexOf('/');
+        if (filterIdx <= 0 || className.indexOf('/') >= 0) {
+            return false;
+        }
+
+        // the filter has a module prefix but the class name has none
+        String filterModuleName = filter.substring(0, filterIdx);
+        if (!className.startsWith(filter.substring(filterIdx + 1))) {
+            return false;
+        }
+
+        if (moduleName != null && !moduleName.isEmpty()) {
+            return filterModuleName.equals(moduleName);
+        }
+
+        int packageIdx = className.lastIndexOf('.');
+        if (packageIdx <= 0) {
+            return false;
+        }
+
+        String packageName = className.substring(0, packageIdx);
+        return ModuleLayer.boot().findModule(filterModuleName).map(m -> m.getPackages().contains(packageName)).orElse(Boolean.FALSE).booleanValue();
+    }
+}

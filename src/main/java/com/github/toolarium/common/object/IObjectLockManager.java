@@ -36,7 +36,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Locks a list of objects inside the same JVM.
+     * Locks a list of objects inside the same JVM. {@code null} elements are ignored: they are not locked and not returned.
      *
      * @param <L> the object lock type
      * @param theObjectLockList the list of objects to lock
@@ -46,7 +46,7 @@ public interface IObjectLockManager {
 
     
     /**
-     * Unlock a  list of objects inside the same JVM.
+     * Unlock a  list of objects inside the same JVM. {@code null} elements are ignored.
      * 
      * @param <L> the object lock type
      * @param theObjectLockList the list of objects to unlock
@@ -64,7 +64,7 @@ public interface IObjectLockManager {
     /**
      * Get the object lock statistic (the number of lock elements)
      *
-     * @return the object lock statistic
+     * @return the object lock statistic, never null
      */
     StatisticCounter getLockStatistic();
 
@@ -72,7 +72,7 @@ public interface IObjectLockManager {
     /**
      * Get the statistics of locks that could not be obtained because of the unlock timeout.
      *
-     * @return the object unlock statistic
+     * @return the object unlock statistic, never null
      */
     StatisticCounter getUnlockStatistic();
 
@@ -80,7 +80,7 @@ public interface IObjectLockManager {
     /**
      * Get the statistics of locks that could not be obtained because they are already locked.
      *
-     * @return the ignore object lock statistic
+     * @return the ignore object lock statistic, never null
      */
     StatisticCounter getIgnoreLockStatistic();
 

@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.github.toolarium.common.statistic.IStatisticCounter;
@@ -16,12 +18,18 @@ import com.github.toolarium.common.statistic.PercentileHistogram;
 import com.github.toolarium.common.statistic.PercentileHistogramTest;
 import com.github.toolarium.common.statistic.StatisticCounter;
 import com.github.toolarium.common.statistic.StatisticCounterTest;
+import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +93,57 @@ public class ClassPathUtilTest {
 
         List<String> list = ClassPathUtil.getInstance().searchClassByName("Object");
         list.remove("org.omg.CORBA.Object");
-        assertEquals("[java.lang.Object]", "" + ClassPathUtil.getInstance().searchClassByName("Object"));
+        assertEquals("[java.lang.Object]", "" + list);
+    }
+
+
+    /**
+     * The returned collections must not modify the internal state
+     */
+    @Test
+    public void testReturnedCollectionsAreDetached() {
+        List<String> list = ClassPathUtil.getInstance().searchClassByName(StringUtil.class.getName());
+        list.clear();
+        assertEquals(LIST_START + StringUtil.class.getName() + LIST_END, "" + ClassPathUtil.getInstance().searchClassByName(StringUtil.class.getName()));
+
+        list = ClassPathUtil.getInstance().searchClassByName("StringUtil");
+        list.clear();
+        assertTrue(ClassPathUtil.getInstance().checkClassByName("StringUtil"));
+
+        list = ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic");
+        list.clear();
+        assertEquals(statisticPackageClasses(), ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.statistic"));
+
+        Set<String> classPaths = ClassPathUtil.getInstance().getClassPaths();
+        assertThrows(UnsupportedOperationException.class, () -> classPaths.clear());
+    }
+
+
+    /**
+     * Search a class by the simple name with file extension
+     */
+    @Test
+    public void testSearchClassBySimpleNameWithExtension() {
+        assertEquals("[java.lang.Integer]", "" + ClassPathUtil.getInstance().searchClassByName("Integer.class"));
+        assertTrue(ClassPathUtil.getInstance().searchClassByName("StringUtil.java").contains(StringUtil.class.getName()));
+        assertTrue(ClassPathUtil.getInstance().searchClassByName("/StringUtil.class").contains(StringUtil.class.getName()));
+    }
+
+
+    /**
+     * The class paths resolved from the class loader must not duplicate entries
+     */
+    @Test
+    public void testClassPathsWithoutDuplicates() {
+        Set<String> normalizedClassPaths = new HashSet<String>();
+        for (String classPath : ClassPathUtil.getInstance().getClassPaths()) {
+            String normalized = new File(classPath).getAbsoluteFile().toPath().normalize().toString();
+            if (File.separatorChar == FileUtil.BACKSLASH) {
+                normalized = normalized.toLowerCase(Locale.ROOT);
+            }
+
+            assertTrue(normalizedClassPaths.add(normalized), "Duplicate class path entry: " + classPath);
+        }
     }
 
     
@@ -95,7 +153,7 @@ public class ClassPathUtilTest {
     @Test
     public void testSearchClassByRegExp() {
         String pkg = "com.github.toolarium.common.statistic";
-        String expected = LIST_START + pkg + ".IStatisticCounter, " + pkg + ".StatisticCounter, " + pkg + ".StatisticCounterTest" + LIST_END;
+        String expected = LIST_START + pkg + ".IStatisticCounter, " + pkg + ".StatisticCounter, " + pkg + ".StatisticCounterTest, " + pkg + ".StatisticCounterTest$1" + LIST_END;
         assertEquals(expected, ClassPathUtil.getInstance().searchClassByRegExp("^com.github.toolarium.common.statistic\\.*[a-zA-Z]*Statistic.*").toString());
     }
 
@@ -247,8 +305,10 @@ public class ClassPathUtilTest {
                 IStatisticCounter.class.getName(),
                 PercentileHistogram.class.getName(),
                 PercentileHistogramTest.class.getName(),
+                PercentileHistogramTest.class.getName() + "$1",
                 StatisticCounter.class.getName(),
-                StatisticCounterTest.class.getName()
+                StatisticCounterTest.class.getName(),
+                StatisticCounterTest.class.getName() + "$1"
         );
         Collections.sort(classes);
         return classes;
@@ -299,5 +359,79 @@ public class ClassPathUtilTest {
         }
 
         return classPathList;
+    }
+
+
+    /**
+     * The classes of a package are sorted
+     */
+    @Test
+    public void testPackageClassesSorted() {
+        List<String> classes = ClassPathUtil.getInstance().searchClassByPackageName("com.github.toolarium.common.util");
+        assertNotNull(classes);
+        List<String> sorted = new ArrayList<String>(classes);
+        Collections.sort(sorted);
+        assertEquals(sorted, classes);
+    }
+
+    /**
+     * Classes of multi-release jars are registered with their real name
+     */
+    @Test
+    public void testNoMultiReleaseClassNames() {
+        List<String> classes = ClassPathUtil.getInstance().searchClassByRegExp("META-INF.*");
+        assertTrue(classes == null || classes.isEmpty(), "Unexpected classes: " + classes);
+    }
+
+
+    /**
+     * The entries of an archive (java.base of the jdk and the jars of the class path) are indexed with their archive url
+     */
+    @Test
+    public void testArchiveEntriesIndexed() {
+        assertEquals("[java.util.zip.ZipFile]", "" + ClassPathUtil.getInstance().searchClassByName("java.util.zip.ZipFile"));
+        for (URL url : ClassPathUtil.getInstance().searchFileByRegExpAsURLList(".*/TestResourceFile.*")) {
+            if ("jar".equals(url.getProtocol())) {
+                assertTrue(url.toString().matches("^jar:file:.*toolarium-classpath-test[12]\\.jar!/.*/TestResourceFile\\.txt$"), url.toString());
+            }
+        }
+    }
+
+
+    /**
+     * The archive name has to match the file name of a class path entry exactly, a part of a file name does not match
+     */
+    @Test
+    public void testSearchArchiveByNameExactMatch() {
+        final String entry = ClassPathUtil.getInstance().searchArchiveByRegExp("^.*.slf4j\\-api\\-.*.jar$").get(0);
+        final String slashifiedEntry = FileUtil.getInstance().slashify(entry);
+        final String fileName = slashifiedEntry.substring(slashifiedEntry.lastIndexOf('/') + 1);
+        assertEquals(entry, ClassPathUtil.getInstance().searchArchiveByName(fileName));
+        assertNull(ClassPathUtil.getInstance().searchArchiveByName(fileName.substring(1)));
+        assertNull(ClassPathUtil.getInstance().searchArchiveByName(fileName.substring(0, fileName.length() - 1)));
+    }
+
+
+    /**
+     * The class path is scanned for classes on the first call which needs the classes, not on creation
+     *
+     * @throws ReflectiveOperationException in case of error
+     */
+    @Test
+    public void testLazyClassListInitialization() throws ReflectiveOperationException {
+        Constructor<ClassPathUtil> constructor = ClassPathUtil.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        ClassPathUtil classPathUtil = constructor.newInstance();
+        Field classesField = ClassPathUtil.class.getDeclaredField("classes");
+        classesField.setAccessible(true);
+
+        assertFalse(classPathUtil.getClassPaths().isEmpty());
+        assertNull(classesField.get(classPathUtil));
+
+        assertTrue(classPathUtil.checkClassByName(ClassPathUtil.class.getName()));
+        Object classList = classesField.get(classPathUtil);
+        assertNotNull(classList);
+        assertTrue(classPathUtil.checkClassByName(ClassPathUtilTest.class.getName()));
+        assertSame(classList, classesField.get(classPathUtil));
     }
 }

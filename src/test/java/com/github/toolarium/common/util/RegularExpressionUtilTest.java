@@ -41,22 +41,26 @@ public class RegularExpressionUtilTest {
     public void testCacheHit() {
         RegularExpressionUtil util = new RegularExpressionUtil();
         Pattern first = util.compile("[0-9]+");
-        Pattern second = util.compile("[0-9]+");
+        final Pattern second = util.compile("[0-9]+");
         assertSame(first, second);
         assertEquals(1, util.getCacheSize());
     }
 
 
     /**
-     * Test that whitespace is trimmed before caching
+     * Test that whitespace is significant and not trimmed before compiling
      */
     @Test
-    public void testTrimming() {
+    public void testNoTrimming() {
         RegularExpressionUtil util = new RegularExpressionUtil();
-        Pattern first = util.compile("  [a-z]+  ");
+        Pattern first = util.compile(" [a-z]+ ");
+        assertEquals(" [a-z]+ ", first.pattern());
+        assertTrue(first.matcher(" abc ").matches());
+        assertTrue(!first.matcher("abc").matches());
         Pattern second = util.compile("[a-z]+");
-        assertSame(first, second);
-        assertEquals(1, util.getCacheSize());
+        assertTrue(second.matcher("abc").matches());
+        assertEquals(2, util.getCacheSize());
+        assertSame(first, util.compile(" [a-z]+ "));
     }
 
 
@@ -77,7 +81,6 @@ public class RegularExpressionUtilTest {
     public void testEmptyInput() {
         RegularExpressionUtil util = new RegularExpressionUtil();
         assertThrows(IllegalArgumentException.class, () -> util.compile(""));
-        assertThrows(IllegalArgumentException.class, () -> util.compile("   "));
     }
 
 
@@ -183,5 +186,18 @@ public class RegularExpressionUtilTest {
     @Test
     public void testSingleton() {
         assertSame(RegularExpressionUtil.getInstance(), RegularExpressionUtil.getInstance());
+    }
+
+
+    /**
+     * Test a whitespace only pattern is valid
+     */
+    @Test
+    public void testWhitespaceOnlyPattern() {
+        RegularExpressionUtil util = new RegularExpressionUtil();
+        Pattern pattern = util.compile(" ");
+        assertTrue(pattern.matcher(" ").matches());
+        assertTrue(util.compile("   ").matcher("   ").matches());
+        assertEquals(2, util.getCacheSize());
     }
 }

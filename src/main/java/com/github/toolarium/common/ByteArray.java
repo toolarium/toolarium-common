@@ -6,37 +6,49 @@
 package com.github.toolarium.common;
 
 import com.github.toolarium.common.util.ByteUtil;
+import java.io.IOException;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Locale;
 
 
 /**
  * Class used to represent an array of bytes as an Object.
- * 
+ *
+ * <p>The predefined constants ({@link #NL}, {@link #CR}, {@link #TAB}, {@link #SPACE}, {@link #DOT} and {@link #EMPTY})
+ * are read-only: all methods which would modify them throw an {@link UnsupportedOperationException}. Methods which
+ * return a copy (e.g. {@link #getBytes()}, {@link #clone()}, {@link #concat(ByteArray)}) return a modifiable instance.</p>
+ *
  * @author patrick
  */
 public class ByteArray 
     implements Serializable, WritableByteChannel, ReadableByteChannel, Cloneable {
     
-    /** The new line character as byte array */
-    public static final ByteArray NL = new ByteArray("\n");
-    
-    /** The cr character as byte array */
-    public static final ByteArray CR = new ByteArray("\r");
+    /** The new line character as byte array (read-only) */
+    public static final ByteArray NL = new ImmutableByteArray("\n");
 
-    /** The tab character as byte array */
-    public static final ByteArray TAB = new ByteArray("\t");
-    
-    /** The space as byte array */    
-    public static final ByteArray SPACE = new ByteArray(" ");
+    /** The cr character as byte array (read-only) */
+    public static final ByteArray CR = new ImmutableByteArray("\r");
 
-    /** The dot character as byte array */    
-    public static final ByteArray DOT = new ByteArray(".");
+    /** The tab character as byte array (read-only) */
+    public static final ByteArray TAB = new ImmutableByteArray("\t");
 
-    /** The dot character as byte array */    
-    public static final ByteArray EMPTY = new ByteArray(1);
+    /** The space as byte array (read-only) */
+    public static final ByteArray SPACE = new ImmutableByteArray(" ");
+
+    /** The dot character as byte array (read-only) */
+    public static final ByteArray DOT = new ImmutableByteArray(".");
+
+    /** The empty byte array (read-only) */
+    public static final ByteArray EMPTY = new ImmutableByteArray("");
     
     /** Defines the default byte array size */
     public static final int DEFAULT_BLOCK_SIZE = 96;
@@ -44,11 +56,21 @@ public class ByteArray
     /** The serial version */
     private static final long serialVersionUID = 3907211563424559664L;
 
+    /** The maximum array size, some JVMs reserve header words in an array */
+    private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
+
+    /** The names of the serialized fields */
+    private static final String FIELD_BYTES = "bytes";
+    private static final String FIELD_LENGTH = "length";
+    private static final String FIELD_IS_OPEN = "isOpen";
+    private static final String FIELD_READ_POSITION = "readPosition";
+
     private byte[] bytes;
     private int length = 0;
     private boolean isOpen; //nio
+    private int readPosition = 0; //nio
 
-    
+
     /**
      * Create a ByteArray with a specific default size
      * 
@@ -60,6 +82,19 @@ public class ByteArray
     }    
     
     
+    /**
+     * Create a ByteArray which takes over the given data without copying it
+     *
+     * @param data the data
+     * @param takeOver only used to distinguish this constructor from the public one
+     */
+    private ByteArray(byte[] data, boolean takeOver) {
+        bytes = data;
+        length = data.length;
+        isOpen = true;
+    }
+
+
     /**
      * Create a ByteArray with the default size
      */
@@ -173,8 +208,8 @@ public class ByteArray
     
     
     /**
-     * Creates a byte array 
-     * 
+     * Creates a byte array from the remaining bytes of the given buffer. The position of the given buffer is not changed.
+     *
      * @param buffer the byte buffer
      * @return the created byte array
      */
@@ -182,16 +217,15 @@ public class ByteArray
         if (buffer == null) {
             return null;
         }
-        
+
         int count = buffer.remaining();
 
         if (count <= 0) {
             return null;
         }
-        
+
         ByteArray newArray = new ByteArray(count);
-        newArray.write(buffer);
-        buffer.rewind();
+        newArray.write(buffer.duplicate());
         return newArray;
     }    
     
@@ -260,14 +294,14 @@ public class ByteArray
 
     
     /**
-     * Append a String
+     * Append a String (UTF-8 encoded)
      * 
      * @param data the data
      * @return the byte array (no copy)
      */
     public ByteArray append(String data) {
         if (data != null) {
-            append(data.getBytes());
+            append(data.getBytes(StandardCharsets.UTF_8));
         }
 
         return this;
@@ -282,7 +316,7 @@ public class ByteArray
      */
     public ByteArray append(StringBuilder data) {
         if (data != null) {
-            append(data.toString().getBytes());
+            append(data.toString().getBytes(StandardCharsets.UTF_8));
         }
         
         return this;
@@ -297,7 +331,7 @@ public class ByteArray
      */
     public ByteArray append(StringBuffer data) {
         if (data != null) {
-            append(data.toString().getBytes());
+            append(data.toString().getBytes(StandardCharsets.UTF_8));
         }
 
         return this;
@@ -305,28 +339,28 @@ public class ByteArray
     
     
     /**
-     * Append a buffer
-     * 
+     * Append the remaining bytes of a buffer. The position of the given buffer is not changed.
+     *
      * @param data the data
      * @return the byte array (no copy)
      */
     public ByteArray append(ByteBuffer data) {
-        while (data.hasRemaining()) {
-            int size = data.remaining();
+        ByteBuffer source = data.duplicate();
+        while (source.hasRemaining()) {
+            int size = source.remaining();
             byte[] d = new byte[size];
-            data.get(d, 0, size);
+            source.get(d, 0, size);
             append(d);
         }
 
-        data.rewind();
         return this;
     }    
 
     
     /**
-     * Reverse the internal array
+     * Reverse the data. This byte array is not modified.
      * 
-     * @return the reversed byte array (no copy)
+     * @return a new byte array with the reversed data (copy)
      */
     public ByteArray reverse() {
         byte[] reversed = new byte[length];
@@ -361,7 +395,7 @@ public class ByteArray
      * @return the byte array (no copy)
      */
     public ByteArray trimRight(byte ch) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return this;
         }
         
@@ -386,7 +420,7 @@ public class ByteArray
      * @return the byte array (no copy)
      */
     public ByteArray trimLeft(byte ch) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return this;
         }
         
@@ -400,26 +434,29 @@ public class ByteArray
         }
 
         if (count == length) {
-            length = 0;
+            shrink(0);
         } else {
             ByteArray trimmed = getBytes(count, length);
+            // wipe the old data, it is replaced by the trimmed copy
+            Arrays.fill(bytes, 0, length, (byte) 0);
             length = trimmed.length;
             bytes = trimmed.bytes;
         }
 
+        readPosition = Math.max(0, readPosition - count);
         return this;
     }    
     
     
     /**
-     * Replaces a given byte with another
+     * Replaces all occurrences of a given byte with another. This byte array is modified.
      * 
      * @param toReplace the byte to replace
      * @param newByte the new byte
-     * @return the byte array (no copy)
+     * @return this byte array (no copy)
      */
     public ByteArray replace(byte toReplace, byte newByte) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return this;
         }
 
@@ -434,11 +471,11 @@ public class ByteArray
     
     
     /**
-     * Replaces data in a given byte array. 
+     * Replaces all occurrences of the given data. This byte array is not modified.
      * 
      * @param replaceData the data to replace
      * @param newData the new data
-     * @return the replaced byte array as a copy (copy)
+     * @return a new byte array with the replaced data (copy); this byte array itself if replaceData is null or empty or newData is null
      */
     public ByteArray replace(ByteArray replaceData, ByteArray newData) {
         if ((replaceData == null) || (replaceData.length() == 0)) {
@@ -474,13 +511,13 @@ public class ByteArray
 
     
     /**
-     * Finds a byte in the data
+     * Finds the first occurrence of a byte in the data
      * 
      * @param toFind the byte to find
-     * @return the position in the data
+     * @return the position in the data or -1 if it is not found
      */
     public int indexOf(byte toFind) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return -1;
         }
 
@@ -495,13 +532,13 @@ public class ByteArray
     
     
     /**
-     * Returns the index within this byte array of the first occurrence of the specified substring, starting at the specified index.
+     * Returns the index within this byte array of the first occurrence of the specified sub array.
      * 
      * @param toFind the sub array for which to search.
-     * @return the index within this array of the first occurrence of the specified sub array, starting at the specified index.
+     * @return the index within this array of the first occurrence of the specified sub array or -1 if it is not found.
      */
     public int indexOf(ByteArray toFind) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return -1;
         }
 
@@ -510,14 +547,14 @@ public class ByteArray
 
     
     /**
-     * Returns the index within this byte array of the first occurrence of the specified substring, starting at the specified index.
+     * Returns the index within this byte array of the first occurrence of the specified sub array, starting at the specified index.
      * 
      * @param toFind the sub array for which to search.
      * @param fromIndex the index from which to start the search.
-     * @return the index within this array of the first occurrence of the specified sub array, starting at the specified index.
+     * @return the index within this array of the first occurrence of the specified sub array, starting at the specified index, or -1 if it is not found.
      */
     public int indexOf(ByteArray toFind, int fromIndex) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return -1;
         }
         return ByteUtil.getInstance().indexOf(bytes, 0, length, toFind.bytes, 0, toFind.length, fromIndex);
@@ -525,13 +562,13 @@ public class ByteArray
     
     
     /**
-     * Finds a byte in the data
+     * Finds the last occurrence of a byte in the data
      * 
      * @param toFind the byte to find
-     * @return the position in the data
+     * @return the position in the data or -1 if it is not found
      */
     public int lastIndexOf(byte toFind) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return -1;
         }
         
@@ -568,7 +605,7 @@ public class ByteArray
             return false;
         }
 
-        if (bytes.length == 0) {
+        if (length == 0) {
             return false;
         }
 
@@ -600,7 +637,7 @@ public class ByteArray
      * @return true if it starts with the prefix
      */
     public boolean startsWith(byte prefix) {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return false;
         }
 
@@ -619,7 +656,7 @@ public class ByteArray
             return 0;
         }
 
-        if (bytes.length == 0) {
+        if (length == 0) {
             return 0;
         }
 
@@ -637,13 +674,13 @@ public class ByteArray
     
     
     /**
-     * Test if the array ends with the given prefix
+     * Test if the array ends with the given suffix
      * 
-     * @param prefix the bytes to test
-     * @return true if it ends with the prefix
+     * @param prefix the byte to test
+     * @return true if it ends with the suffix
      */
     public boolean endsWith(byte prefix) {
-        if (bytes.length == 0 || length <= 0) {
+        if (length <= 0) {
             return false;
         }
 
@@ -652,17 +689,17 @@ public class ByteArray
     
     
     /**
-     * Test if the array starts with the given prefix
+     * Test if the array ends with the given suffix
      * 
      * @param prefix the bytes to test
-     * @return true if it starts with the prefix
+     * @return true if it ends with the suffix
      */
     public boolean endsWith(ByteArray prefix) {
         if (prefix == null || prefix.length == 0) {
             return false;
         }
 
-        if (bytes.length == 0 || length <= 0) {
+        if (length <= 0) {
             return false;
         }
 
@@ -681,7 +718,7 @@ public class ByteArray
             return 0;
         }
 
-        if (bytes.length == 0) {
+        if (length == 0) {
             return 0;
         }
 
@@ -710,7 +747,7 @@ public class ByteArray
             if (b < 0x10) {
                 hexNumber.append('0');
             }
-            hexNumber.append(Integer.toHexString(b).toUpperCase());
+            hexNumber.append(Integer.toHexString(b).toUpperCase(Locale.ROOT));
         }
 
         return hexNumber.toString();
@@ -718,13 +755,13 @@ public class ByteArray
 
     
     /**
-     * Convert to String
+     * Convert to String (UTF-8 decoded)
      * 
      * @return the byte array as String
      */
     @Override
     public String toString() {
-        return new String(bytes, 0, length);
+        return new String(bytes, 0, length, StandardCharsets.UTF_8);
     }
     
     
@@ -741,29 +778,40 @@ public class ByteArray
     
     
     /**
-     * Build a long from  the array.
+     * Build a long from the first (up to) 8 valid bytes of the array (spare capacity of the internal buffer is ignored).
+     * The bytes are interpreted as a big-endian two's-complement number, shorter arrays are sign-extended
+     * (consistent with ByteUtil#toLong(byte[])).
      *
-     * @return the long value.
+     * @return the long value or 0 in case the array is empty.
      */
     public long toLong() {
-        return ByteUtil.getInstance().toLong(bytes);
+        if (length == 0) {
+            return 0;
+        }
+
+        byte[] data = new byte[Math.min(length, 8)];
+        System.arraycopy(bytes, 0, data, 0, data.length);
+        return new BigInteger(data).longValue();
     }
     
     
     /**
-     * Return a byte buffer of the data
+     * Return a byte buffer of the data. The buffer is backed by the internal array (no copy): changes of the buffer
+     * are visible in this byte array and vice versa. After the internal array grows, the buffer no longer reflects
+     * the data of this byte array. For read only constants, a read only buffer is returned.
      * 
      * @return the buffer
      */
     public ByteBuffer toByteBuffer() {
-        return ByteBuffer.wrap(bytes, 0, length);
+        // slice: the capacity is the length, so the unused part of the internal array is not accessible
+        return ByteBuffer.wrap(bytes, 0, length).slice();
     }
     
     
     /**
      * Return a sub part of the original bytes
      * 
-     * @param startPos the start position
+     * @param startPos the start position, a start position beyond the length returns an empty array
      * @param endPos the end position
      * @return the bytes (copy)
      */
@@ -777,6 +825,8 @@ public class ByteArray
         
         if (startPos >= 0 && startPos <= length()) {
             start = startPos;
+        } else if (startPos > length()) {
+            start = length();
         }
 
         if (endPos < 0) {
@@ -813,7 +863,7 @@ public class ByteArray
     /**
      * Return the bytes as a copy
      * 
-     * @param startPos the start position
+     * @param startPos the start position, a start position beyond the length returns an empty array
      * @param endPos the end position
      * @return the bytes (copy)
      */
@@ -827,6 +877,8 @@ public class ByteArray
         
         if (startPos >= 0 && startPos <= length()) {
             start = startPos;
+        } else if (startPos > length()) {
+            start = length();
         }
 
         if (endPos < 0) {
@@ -929,7 +981,8 @@ public class ByteArray
      * @return the byte array (no copy)
      */
     public ByteArray erase() {
-        length = 0;
+        shrink(0);
+        readPosition = 0;
         return this;
     }
     
@@ -947,16 +1000,18 @@ public class ByteArray
     /**
      * Chop some bytes
      * 
-     * @param num number of bytes to chop
+     * @param num number of bytes to chop, a negative number or zero chops nothing
      * @return the byte array (no copy)
      */
     public ByteArray chopRight(int num) {
-        length -= num;
-
-        if (length < 0) {
-            length = 0;
+        if (num <= 0) {
+            return this;
         }
 
+        shrink(Math.max(0, length - num));
+
+        // keep the read position inside the data, so bytes appended later are read
+        readPosition = Math.min(readPosition, length);
         return this;
     }
     
@@ -974,13 +1029,18 @@ public class ByteArray
     /**
      * Chop some bytes
      * 
-     * @param num number of bytes to chop
+     * @param num number of bytes to chop, a negative number or zero chops nothing
      * @return the byte array (no copy)
      */
     public ByteArray chopLeft(int num) {
+        if (num <= 0) {
+            return this;
+        }
+
         if (num <= length) {
             System.arraycopy(bytes, num, bytes, 0, length - num);
-            length -= num;
+            shrink(length - num);
+            readPosition = Math.max(0, readPosition - num);
         } else {
             erase();
         }
@@ -990,6 +1050,11 @@ public class ByteArray
 
     
     /**
+     * Appends the remaining bytes of the given buffer. A closed byte array accepts no data and returns 0,
+     * check {@link #isOpen()} to detect it.
+     *
+     * @param src the buffer from which bytes are to be retrieved
+     * @return the number of bytes written, 0 if the buffer is null or empty or the channel is closed
      * @see java.nio.channels.WritableByteChannel#write(java.nio.ByteBuffer)
      */
     @Override
@@ -1029,17 +1094,29 @@ public class ByteArray
 
 
     /**
+     * Reads a sequence of bytes from this byte array into the given buffer. The byte array keeps a read position:
+     * every call transfers at most {@code dst.remaining()} bytes starting at the current read position and advances it.
+     * Once all bytes have been read (or the channel is closed) -1 is returned. The read position is reset by {@link #erase()}.
+     *
+     * @param dst the buffer into which bytes are to be transferred
+     * @return the number of bytes read, possibly zero, or -1 if the end of the data is reached or the channel is closed
      * @see java.nio.channels.ReadableByteChannel#read(java.nio.ByteBuffer)
      */
     @Override
     public int read(ByteBuffer dst) {
-        if (!isOpen || dst == null || length() == 0) {
+        if (!isOpen || readPosition >= length) {
+            return -1;
+        }
+
+        if (dst == null || !dst.hasRemaining()) {
             return 0;
         }
 
-        dst.put(bytes, 0, length); 
-        return length;
-    }    
+        int count = Math.min(dst.remaining(), length - readPosition);
+        dst.put(bytes, readPosition, count);
+        readPosition += count;
+        return count;
+    }
     
     
     /**
@@ -1072,7 +1149,7 @@ public class ByteArray
             return false;
         }
 
-        if (other.getClass() != this.getClass()) {
+        if (getComparableClass(other) != getComparableClass(this)) {
             return false;
         }
 
@@ -1096,7 +1173,7 @@ public class ByteArray
      */
     @Override
     public int hashCode() {
-        if (bytes.length == 0) {
+        if (length == 0) {
             return 0;
         }
         
@@ -1136,25 +1213,354 @@ public class ByteArray
     
     
     /**
-     * Gets the new data size
-     * 
+     * Gets the new data size: the used length plus the requested space, at least the doubled used length,
+     * so that many small appends stay fast
+     *
      * @param requestedSpace the requested space
      * @return the new size
+     * @throws OutOfMemoryError if the required size exceeds the maximum array size
      */
     protected int getNewDataSize(int requestedSpace) {
-        int size = 0;
+        // the size is calculated from the used length and not from the capacity of the internal array
+        long size = length;
 
-        if (bytes != null) {
-            size = bytes.length;
-        }
-        
         // the minimum new space
-        int minLen = requestedSpace + size;
+        long minLen = requestedSpace + size;
+        if (minLen > MAX_ARRAY_SIZE) {
+            throw new OutOfMemoryError("Required array size too large: " + minLen);
+        }
 
         // allocate in block size
-        int rest = DEFAULT_BLOCK_SIZE - (minLen % DEFAULT_BLOCK_SIZE);
-        return minLen + rest;
+        long newLen = minLen + DEFAULT_BLOCK_SIZE - (minLen % DEFAULT_BLOCK_SIZE);
+
+        // grow at least by doubling
+        newLen = Math.max(newLen, size * 2);
+        if (newLen > MAX_ARRAY_SIZE) {
+            newLen = MAX_ARRAY_SIZE;
+        }
+
+        return (int) newLen;
     }
 
-    
+
+    /**
+     * Get the class used for the comparison in the equals method: the read-only constants are equal to a normal byte array with the same content.
+     *
+     * @param o the object
+     * @return the class to compare
+     */
+    private static Class<?> getComparableClass(Object o) {
+        if (o instanceof ImmutableByteArray) {
+            return ByteArray.class;
+        }
+
+        return o.getClass();
+    }
+
+
+    /**
+     * Shrinks the length of the data. The freed bytes are overwritten with 0, so that removed data (e.g. a password)
+     * does not stay in the internal array.
+     *
+     * @param newLength the new length, not greater than the current length
+     */
+    private void shrink(int newLength) {
+        if (newLength < length) {
+            Arrays.fill(bytes, newLength, length, (byte) 0);
+        }
+
+        length = newLength;
+    }
+
+
+    /**
+     * Writes the state, the internal array is written only up to the length, so that the unused part is not serialized.
+     *
+     * @param out the object output stream
+     * @throws IOException if an I/O error occurs
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        final ObjectOutputStream.PutField fields = out.putFields();
+        fields.put(FIELD_BYTES, Arrays.copyOf(bytes, length));
+        fields.put(FIELD_LENGTH, length);
+        fields.put(FIELD_IS_OPEN, isOpen);
+        fields.put(FIELD_READ_POSITION, readPosition);
+        out.writeFields();
+    }
+
+
+    /**
+     * Reads and validates the state: the internal array must exist, the length must be within the internal array
+     * and the read position within the length.
+     *
+     * @param in the object input stream
+     * @throws InvalidObjectException if the state is not valid
+     * @throws IOException if an I/O error occurs
+     * @throws ClassNotFoundException if the class of a serialized object can not be found
+     */
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        final ObjectInputStream.GetField fields = in.readFields();
+        final Object readBytes = fields.get(FIELD_BYTES, null);
+        final int readLength = fields.get(FIELD_LENGTH, 0);
+        final boolean readIsOpen = fields.get(FIELD_IS_OPEN, false);
+        final int readReadPosition = fields.get(FIELD_READ_POSITION, 0);
+
+        if (!(readBytes instanceof byte[])) {
+            throw new InvalidObjectException("Invalid byte array: the data is missing!");
+        }
+
+        final byte[] data = (byte[]) readBytes;
+        if (readLength < 0 || readLength > data.length) {
+            throw new InvalidObjectException("Invalid byte array: the length " + readLength + " is not between 0 and " + data.length + "!");
+        }
+
+        if (readReadPosition < 0 || readReadPosition > readLength) {
+            throw new InvalidObjectException("Invalid byte array: the read position " + readReadPosition + " is not between 0 and " + readLength + "!");
+        }
+
+        bytes = data;
+        length = readLength;
+        isOpen = readIsOpen;
+        readPosition = readReadPosition;
+    }
+
+
+    /**
+     * Read-only byte array which is used for the shared constants. All modifying methods throw an {@link UnsupportedOperationException}.
+     *
+     * @author patrick
+     */
+    private static final class ImmutableByteArray extends ByteArray {
+        private static final long serialVersionUID = -2335627781208740913L;
+        private static final String READ_ONLY_MESSAGE = "The byte array is read-only!";
+
+
+        /**
+         * Constructor for ImmutableByteArray
+         *
+         * @param data the data
+         */
+        ImmutableByteArray(String data) {
+            super(data.getBytes(StandardCharsets.UTF_8), true);
+        }
+
+
+        /**
+         * Create the read-only exception.
+         *
+         * @return the exception
+         */
+        private static UnsupportedOperationException readOnly() {
+            return new UnsupportedOperationException(READ_ONLY_MESSAGE);
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(byte)
+         */
+        @Override
+        public ByteArray append(byte ch) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(com.github.toolarium.common.ByteArray)
+         */
+        @Override
+        public ByteArray append(ByteArray data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(byte[])
+         */
+        @Override
+        public ByteArray append(byte[] data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(byte[], int, int)
+         */
+        @Override
+        public ByteArray append(byte[] data, int off, int len) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(java.lang.String)
+         */
+        @Override
+        public ByteArray append(String data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(java.lang.StringBuilder)
+         */
+        @Override
+        public ByteArray append(StringBuilder data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(java.lang.StringBuffer)
+         */
+        @Override
+        public ByteArray append(StringBuffer data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#append(java.nio.ByteBuffer)
+         */
+        @Override
+        public ByteArray append(ByteBuffer data) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#trim(byte)
+         */
+        @Override
+        public ByteArray trim(byte ch) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#trimRight(byte)
+         */
+        @Override
+        public ByteArray trimRight(byte ch) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#trimLeft(byte)
+         */
+        @Override
+        public ByteArray trimLeft(byte ch) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#replace(byte, byte)
+         */
+        @Override
+        public ByteArray replace(byte toReplace, byte newByte) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#set(int, byte)
+         */
+        @Override
+        public byte set(int pos, byte b) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#erase()
+         */
+        @Override
+        public ByteArray erase() {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#chopRight()
+         */
+        @Override
+        public ByteArray chopRight() {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#chopRight(int)
+         */
+        @Override
+        public ByteArray chopRight(int num) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#chopLeft()
+         */
+        @Override
+        public ByteArray chopLeft() {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#chopLeft(int)
+         */
+        @Override
+        public ByteArray chopLeft(int num) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#write(java.nio.ByteBuffer)
+         */
+        @Override
+        public int write(ByteBuffer src) {
+            throw readOnly();
+        }
+
+
+        /**
+         * The shared constants keep no read position; read from a copy (e.g. {@link #getBytes()}) instead.
+         *
+         * @see com.github.toolarium.common.ByteArray#read(java.nio.ByteBuffer)
+         */
+        @Override
+        public int read(ByteBuffer dst) {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#close()
+         */
+        @Override
+        public void close() {
+            throw readOnly();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#toByteBuffer()
+         */
+        @Override
+        public ByteBuffer toByteBuffer() {
+            return super.toByteBuffer().asReadOnlyBuffer();
+        }
+
+
+        /**
+         * @see com.github.toolarium.common.ByteArray#crowUpDataSize(int)
+         */
+        @Override
+        protected void crowUpDataSize(int requestedSpace) {
+            throw readOnly();
+        }
+    }
 }

@@ -105,62 +105,59 @@ public final class ClassInstanceUtil {
     
     
     /**
-     * Load a class by given name
+     * Create a new array with the given component type and length, e.g. <code>createArray(String.class, 2)</code> returns a <code>String[2]</code>.
      * 
      * @param <T> the generic type
-     * @param theClass the class 
+     * @param theClass the component type of the array (must not be a primitive type)
      * @param length the length of the array
-     * @return the loaded class
-     * @throws IllegalArgumentException In case of invalid input
+     * @return the new array with the runtime component type <code>theClass</code>
+     * @throws IllegalArgumentException In case of invalid input (null or primitive class, length &lt;= 0)
      */
     public <T> T[] createArray(Class<T> theClass, int length) {
-        if (theClass == null || length <= 0) {
+        if (theClass == null || theClass.isPrimitive() || length <= 0) {
             throw new IllegalArgumentException("Invalid data to create an array!");
         }
 
         @SuppressWarnings("unchecked")
-        T[] array = (T[]) new Object[length];
+        T[] array = (T[]) java.lang.reflect.Array.newInstance(theClass, length);
         return array;
     }    
 
     
     /**
-     * Check if the given class exists
-     * 
+     * Check if the given class exists. The class is not initialized, its static initializers are not executed.
+     * The same class loaders as in {@link #newInstance(String)} are used: first the context class loader of the
+     * current thread, then the class loader of this library.
+     *
      * @param className the name of the class to check
      * @return true if the class exists; otherwise false
      */
     public boolean isClassAvailable(String className) {
-        try {
-            Class.forName(className);
-            return true;
-        } catch (NoClassDefFoundError | Exception e) {
-            return false;
-        }
-    }
-
-    
-    /**
-     * Check if a given class implements an interface
-     * 
-     * @param className the class name
-     * @param interfaceClazz the interface
-     * @return true if the class implements the interface
-     */
-    public boolean implementsInterface(String className, Class<?> interfaceClazz) {
         if (className == null || className.trim().isEmpty()) {
             return false;
         }
 
-        try {
-            Class<?> clazz = getClassObject(className);
-            if (clazz == null) {
-                return false;
-            }
+        return ReflectionUtil.getInstance().isClassAvailable(className);
+    }
 
-            return interfaceClazz.isAssignableFrom(clazz);
-        } catch (ClassNotFoundException e) {
+    
+    /**
+     * Check if a given class implements an interface. The class is not initialized, its static initializers are not executed.
+     *
+     * @param className the class name
+     * @param interfaceClazz the interface
+     * @return true if the class implements the interface; false if not or if the class could not be found or not be linked
+     */
+    public boolean implementsInterface(String className, Class<?> interfaceClazz) {
+        if (className == null || className.trim().isEmpty() || interfaceClazz == null) {
             return false;
         }
+
+        Class<?> clazz = ReflectionUtil.getInstance().getClassObjectWithoutInitialization(className);
+        if (clazz == null) {
+            return false;
+        }
+
+        return interfaceClazz.isAssignableFrom(clazz);
     }
 }

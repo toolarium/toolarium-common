@@ -7,8 +7,9 @@ package com.github.toolarium.common.util;
 
 import com.github.toolarium.common.ByteArray;
 import java.io.ByteArrayOutputStream;
-import java.math.BigInteger;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 
 
 /**
@@ -18,7 +19,7 @@ import java.text.DecimalFormat;
  */
 public final class ByteUtil {
     private static final String BYTE_SORT_TYPE = "BKMGTPEZY";
-    private static final ThreadLocal<DecimalFormat> FORMATTER = ThreadLocal.withInitial(() -> new DecimalFormat("##.#"));
+    private final ThreadLocal<DecimalFormat> formatter;
 
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
@@ -34,7 +35,9 @@ public final class ByteUtil {
      * Constructor
      */
     private ByteUtil() {
-        // NOP
+        // the decimal separator is always a dot, independent of the default locale
+        final DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(Locale.ROOT);
+        formatter = ThreadLocal.withInitial(() -> new DecimalFormat("##.#", symbols));
     }
 
     
@@ -50,6 +53,7 @@ public final class ByteUtil {
     
     /**
      * Format a byte count as a human-readable string (e.g. {@code "16B"}, {@code "1.5K"}, {@code "2M"}).
+     * A negative size is scaled like a positive one and keeps its sign (e.g. {@code "-1.5K"}).
      *
      * @param size the size in bytes
      * @return the formatted string
@@ -58,39 +62,42 @@ public final class ByteUtil {
         double byteSize = size;
         int i = 0;
 
-        while (byteSize > 768.0) {
+        // negative values are scaled like positive values, the sign is kept
+        while (Math.abs(byteSize) > 768.0) {
             i++;
             byteSize /= 1024.0;
         }
 
-        return (FORMATTER.get().format(byteSize) + BYTE_SORT_TYPE.charAt(i)).trim();
+        return (formatter.get().format(byteSize) + BYTE_SORT_TYPE.charAt(i)).trim();
     }
 
 
     /**
      * Check two blocks for equality.
-     * The specified sub blocks of the given byte arrays are checked for equality.
+     * The specified sub blocks of the given byte arrays are checked for equality. The comparison time does not depend
+     * on the content (constant time), so it can be used to compare secrets.
      *
      * @param dataA the first byte array to be compared
      * @param offsetDataA the offset indicating the start position of the sub-block of <code>a</code>
      * @param dataB the second byte array to be compared
-     * @param offsetDataB the offset indicating the start position of the sub-block of <code>b</code> 
+     * @param offsetDataB the offset indicating the start position of the sub-block of <code>b</code>
      * @param len the number of bytes to be compared
-     * @return <code>true</code>, if the two sub-blocks are equal, 
-     *         <code>false</code> otherwise
+     * @return <code>true</code>, if the two sub-blocks are equal,
+     *         <code>false</code> otherwise or if an array is null or a sub-block is out of range
      */
     public boolean equalsBlock(byte[] dataA, int offsetDataA, byte[] dataB, int offsetDataB, int len) {
-        try {
-            for (int i = 0; i < len; ++i) {
-                if (dataA[offsetDataA + i] != dataB[offsetDataB + i]) {
-                    return false;
-                }
-            }
-        } catch (Exception ex) {
+        if (dataA == null || dataB == null || len < 0
+                || offsetDataA < 0 || offsetDataA > dataA.length - len
+                || offsetDataB < 0 || offsetDataB > dataB.length - len) {
             return false;
         }
 
-        return true;
+        int result = 0;
+        for (int i = 0; i < len; ++i) {
+            result |= dataA[offsetDataA + i] ^ dataB[offsetDataB + i];
+        }
+
+        return result == 0;
     }
 
  
@@ -99,10 +106,14 @@ public final class ByteUtil {
      *
      * @param a the first byte array to be compared
      * @param b the second byte array to be compared
-     * @return <code>true</code>, if the two blocks are equal, 
+     * @return <code>true</code>, if the two blocks are equal or both are null,
      *         <code>false</code> otherwise
      */
     public boolean equalsBlock(byte[] a, byte[] b) {
+        if (a == null || b == null) {
+            return a == b;
+        }
+
         if (a.length == b.length) {
             return equalsBlock(a, 0, b, 0, a.length);
         }
@@ -112,7 +123,7 @@ public final class ByteUtil {
    
     /**
      * Convert the given string with hex values to a byte array. For example "001122" is turned into {0, 0x11, 0x22}. All characters
-     * outside the range of '0'-'9', 'a'-'z', and 'A'-'Z' or simply ignored.
+     * outside the range of '0'-'9', 'a'-'f', and 'A'-'F' are simply ignored. In case of an odd number of hex digits, the last digit is dropped.
      * 
      * @param s the string to convert
      * @return the byte array
@@ -142,7 +153,7 @@ public final class ByteUtil {
 
     
     /**
-     * Convert the given char to an int. '0' maps to 0, 'a' and 'A' to 10, 'z' and 'Z' to 36, and so on. For all other characters and for
+     * Convert the given char to an int. '0' maps to 0, 'a' and 'A' to 10, 'z' and 'Z' to 35, and so on. For all other characters and for
      * resulting values equal to or larger than radix -1 is returned.
      * 
      * @param c the string to convert
@@ -184,9 +195,7 @@ public final class ByteUtil {
      * @param len the number of bytes to be copied 
      */
     public void copyBlock(byte[] src, int srcOff, byte[] dst, int dstOff, int len) {
-        for (int i = 0; i < len; i++) {
-            dst[dstOff + i] = src[srcOff + i];
-        }
+        System.arraycopy(src, srcOff, dst, dstOff, len);
     }
 
     
@@ -197,9 +206,7 @@ public final class ByteUtil {
      * @param dst the destination array to which to copy the bytes
      */
     public void copyBlock(byte[] src, byte[] dst) {
-        for (int i = 0; i < src.length; i++) {
-            dst[i] = src[i];
-        }
+        System.arraycopy(src, 0, dst, 0, src.length);
     }
 
     
@@ -218,9 +225,7 @@ public final class ByteUtil {
      * @param len the number of ints to be copied 
      */
     public void copyBlock(int[] src, int srcOff, int[] dst, int dstOff, int len) {
-        for (int i = 0; i < len; i++) {
-            dst[dstOff + i] = src[srcOff + i];
-        }
+        System.arraycopy(src, srcOff, dst, dstOff, len);
     }
 
     
@@ -231,9 +236,7 @@ public final class ByteUtil {
      * @param dst the destination array to which to copy the ints
      */
     public void copyBlock(int[] src, int[] dst) {
-        for (int i = 0; i < src.length; i++) {
-            dst[i] = src[i];
-        }
+        System.arraycopy(src, 0, dst, 0, src.length);
     }
         
     
@@ -258,59 +261,46 @@ public final class ByteUtil {
 
     
     /**
-     * Convert from a long value to a 8 byte array 
+     * Convert from a long value to a 8 byte array in big-endian byte order (most significant byte first).
+     * Be aware, the byte order differs from {@link #toBytes(int)} which uses little-endian byte order.
      * 
-     * @param src the array to convert (must be of size 8)
-     * @return the converted byte array
+     * @param inputSrc the long value to convert
+     * @return the converted byte array, always of size 8
      */    
-    public byte[] toBytes(long src) {
-        return BigInteger.valueOf(src).toByteArray();
-        /*
-        byte[] dest = new byte[ 8 ];
-     
-        dest[7] = (byte)src;
-        src >>>= 8;
-        dest[6] = (byte)src;
-        src >>>= 8;
-        dest[5] = (byte)src;
-        src >>>= 8;
-        dest[4] = (byte)src;
-        src >>>= 8;
-        dest[3] = (byte)src;
-        src >>>= 8;
-        dest[2] = (byte)src;
-        src >>>= 8;
-        dest[1] = (byte)src;
-        src >>>= 8;
-        dest[0] = (byte)src;
+    public byte[] toBytes(long inputSrc) {
+        long src = inputSrc;
+        byte[] dest = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            dest[i] = (byte) (src & 0xFF);
+            src >>>= 8;
+        }
         return dest;
-        */
     }
 
     
     /**
-     * Prepare a byte array to a byte array of a defined size 
+     * Prepare a byte array to a byte array with a size which is a multiple of the given length: the data is
+     * filled up with leading zeros, e.g. <code>{1, 2, 3}</code> with length 4 results in <code>{0, 1, 2, 3}</code>.
      * 
      * @param src the array to prepare
-     * @param len the size of the returned byte array
-     * @return the prepared byte array with the defined size
+     * @param len the block size; the size of the returned byte array is a multiple of it
+     * @return the prepared byte array, always a new array
+     * @throws IllegalArgumentException in case the length is 0 or negative
      */    
     public byte[] toBytes(byte[] src, int len) {
+        if (len <= 0) {
+            throw new IllegalArgumentException("Invalid length: " + len);
+        }
+
         if (src.length % len == 0) {
-            return src;
+            return src.clone();
         }
 
         int size = len * ((src.length / len) + 1);
-        int diff = size - src.length;
-
         byte[] result = new byte[size];
-        for (int i = 0; i < size; i++) {
-            result[i] = 0x00;
-        }
-
-        copyBlock(src, 0, result, diff, src.length);
+        copyBlock(src, 0, result, size - src.length, src.length);
         return result;
-    }    
+    }
     
         
     /**
@@ -329,18 +319,21 @@ public final class ByteUtil {
     
     
     /**
-     * Build an integer from first 4 bytes of the array.
+     * Build an integer from first 4 bytes of the array (little-endian byte order, see {@link #toBytes(int)}).
+     * Additional bytes are ignored, missing bytes count as 0.
      *
      * @param src The byte[] to convert.
-     * @return the integer value.
+     * @return the integer value; 0 in case the array is null or empty.
      */
     public int toInteger(byte[] src) {
-        if (src == null) {
+        if (src == null || src.length == 0) {
             return 0;
         }
 
         int result = (src[0] & 0xFF);
-        result |= ((src[1] & 0xFF) << 8);
+        if (src.length > 1) {
+            result |= ((src[1] & 0xFF) << 8);
+        }
 
         if (src.length > 2) {
             result |= ((src[2] & 0xFF) << 16);
@@ -355,35 +348,33 @@ public final class ByteUtil {
     
     
     /**
-     * Build a long from first 8 bytes of the array.
+     * Build a long from the first 8 bytes of the array in big-endian byte order (most significant byte first),
+     * see {@link #toBytes(long)}. Additional bytes are ignored. If the array is shorter than 8 bytes, it is interpreted
+     * as big-endian two's complement value (sign extended), e.g. <code>{(byte) 0xFF}</code> results in -1.
      *
      * @param src The byte[] to convert.
-     * @return the long value.
+     * @return the long value; 0 in case the array is null or empty.
      */
     public long toLong(byte[] src) {
-        if (src == null) {
+        if (src == null || src.length == 0) {
             return 0;
         }
-        
-        return (new BigInteger(src)).longValue();
-        /*
-        return ( ( ( (long) src[7]) & 0xFF )
-                + ( ( ( (long) src[6]) & 0xFF ) << 8 )
-                + ( ( ( (long) src[5]) & 0xFF ) << 16 )
-                + ( ( ( (long) src[4]) & 0xFF ) << 24 )
-                + ( ( ( (long) src[3]) & 0xFF ) << 32 )
-                + ( ( ( (long) src[2]) & 0xFF ) << 40 )
-                + ( ( ( (long) src[1]) & 0xFF ) << 48 )
-                + ( ( ( (long) src[0]) & 0xFF ) << 56 ) );
-                */
+
+        int len = Math.min(src.length, 8);
+        long result = src[0]; // sign extended
+        for (int i = 1; i < len; i++) {
+            result = (result << 8) | (src[i] & 0xFFL);
+        }
+
+        return result;
     }
 
     
     /**
-     * Build a long from first 8 bytes of the array.
+     * Build a long from first 8 bytes of the array, see {@link #toLong(byte[])}.
      *
      * @param src The byte[] to convert.
-     * @return the long value.
+     * @return the long value; 0 in case the array is null or empty.
      */
     public long toLong(ByteArray src) {
         if (src == null) {

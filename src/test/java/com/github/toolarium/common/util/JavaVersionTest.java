@@ -7,9 +7,12 @@ package com.github.toolarium.common.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.github.toolarium.common.version.Version;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import org.junit.jupiter.api.Test;
 
 
@@ -107,5 +110,61 @@ public class JavaVersionTest {
         Version resolvedVersion = JavaVersion.convertJavaVersion("21.0").getJavaVersion();
         assertEquals(version.getMajorNumber(), resolvedVersion.getMajorNumber());
         assertEquals(version.getMinorNumber(), resolvedVersion.getMinorNumber());
+    }
+
+
+    /**
+     * Test resolve java version from a class file stream
+     *
+     * @throws IOException in case of error
+     */
+    @Test
+    public void testResolveJavaVersionFromClassStream() throws IOException {
+        assertEquals(JavaVersion.JAVA_11, JavaVersion.resolveJavaVersion(createClassHeader(55, 0)));
+        assertEquals(JavaVersion.JAVA_1_8, JavaVersion.resolveJavaVersion(createClassHeader(52, 0)));
+        assertEquals(JavaVersion.JAVA_21, JavaVersion.resolveJavaVersion(createClassHeader(65, 0xFFFF)));
+        assertEquals(JavaVersion.JAVA_1_1, JavaVersion.resolveJavaVersion(createClassHeader(45, 3)));
+        assertEquals(JavaVersion.JAVA_27, JavaVersion.resolveJavaVersion(createClassHeader(71, 0)));
+        assertEquals(JavaVersion.JAVA_28, JavaVersion.resolveJavaVersion(createClassHeader(72, 0)));
+        assertNull(JavaVersion.resolveJavaVersion(createClassHeader(10, 0)));
+        assertNull(JavaVersion.resolveJavaVersion(new ByteArrayInputStream(new byte[] {1, 2, 3, 4, 0, 0, 0, 55})));
+    }
+
+
+    /**
+     * Test resolve java version from a real class file
+     *
+     * @throws IOException in case of error
+     */
+    @Test
+    public void testResolveJavaVersionFromClassResource() throws IOException {
+        try (InputStream in = JavaVersion.class.getResourceAsStream("JavaVersion.class")) {
+            JavaVersion v = JavaVersion.resolveJavaVersion(in);
+            assertNotEquals(null, v);
+        }
+    }
+
+
+    /**
+     * Create a class file header
+     *
+     * @param major the class major version
+     * @param minor the class minor version
+     * @return the stream
+     */
+    private InputStream createClassHeader(int major, int minor) {
+        return new ByteArrayInputStream(new byte[] {(byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE,
+                                                    (byte) (minor >> 8), (byte) minor, (byte) (major >> 8), (byte) major });
+    }
+
+    /**
+     * Test convert of real java.version values
+     */
+    @Test
+    public void testConvertRealJavaVersionStrings() {
+        assertEquals(JavaVersion.JAVA_1_8, JavaVersion.convertJavaVersion("1.8.0_392"));
+        assertEquals(JavaVersion.JAVA_21, JavaVersion.convertJavaVersion("21.0.2"));
+        assertEquals(JavaVersion.JAVA_27, JavaVersion.convertJavaVersion("27-ea"));
+        assertEquals(JavaVersion.JAVA_28, JavaVersion.convertJavaVersion("28"));
     }
 }

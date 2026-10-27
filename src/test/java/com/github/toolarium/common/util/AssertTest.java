@@ -5,12 +5,20 @@
  */
 package com.github.toolarium.common.util;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.slf4j.event.Level;
 
 
 /**
@@ -210,6 +218,60 @@ public class AssertTest {
         
         try {
             Assert.isNotEmpty(emptyList, IOException.class, MY_MESSAGE, LOG_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+    }
+
+
+    /**
+     * Test isEmpty / isNotEmpty with map, array and char sequence
+     *
+     * @throws IOException in case of error
+     */
+    @Test
+    public void testIsEmptyMapArrayCharSequence() throws IOException {
+        Map<String, String> emptyMap = new HashMap<String, String>();
+        Map<String, String> notEmptyMap = new HashMap<String, String>();
+        notEmptyMap.put("key", "value");
+
+        // positive tests
+        Assert.isEmpty(emptyMap, IOException.class, MY_MESSAGE);
+        Assert.isEmpty(new String[0], IOException.class, MY_MESSAGE);
+        Assert.isEmpty(new int[0], IOException.class, MY_MESSAGE);
+        Assert.isEmpty(new StringBuilder("  "), IOException.class, MY_MESSAGE);
+        Assert.isNotEmpty(notEmptyMap, IOException.class, MY_MESSAGE);
+        Assert.isNotEmpty(new String[] {"a"}, IOException.class, MY_MESSAGE);
+        Assert.isNotEmpty(new int[] {1}, IOException.class, MY_MESSAGE);
+        Assert.isNotEmpty(new StringBuilder("a"), IOException.class, MY_MESSAGE);
+
+        // negative tests
+        try {
+            Assert.isEmpty(notEmptyMap, IOException.class, MY_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+
+        try {
+            Assert.isEmpty(new String[] {"a"}, IOException.class, MY_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+
+        try {
+            Assert.isEmpty(new StringBuilder("a"), IOException.class, MY_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+
+        try {
+            Assert.isNotEmpty(emptyMap, IOException.class, MY_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+
+        try {
+            Assert.isNotEmpty(new int[0], IOException.class, MY_MESSAGE);
+            fail();
+        } catch (IOException e) { /* NOP */ }
+
+        try {
+            Assert.isNotEmpty(new StringBuilder(" "), IOException.class, MY_MESSAGE);
             fail();
         } catch (IOException e) { /* NOP */ }
     }
@@ -529,6 +591,109 @@ public class AssertTest {
             fail();
         } catch (TestException e) {
             // NOP
+        }
+    }
+
+
+    /**
+     * Test the log configuration of a failed assertion
+     */
+    @Test
+    public void testLogConfiguration() {
+        try {
+            Assert.setLogLevel(Level.WARN);
+            Assert.setLogStackTrace(true);
+            assertThrows(TestException.class, () -> Assert.isTrue(false, TestException.class, MY_MESSAGE, LOG_MESSAGE));
+        } finally {
+            Assert.setLogLevel(null);
+            Assert.setLogStackTrace(false);
+        }
+    }
+
+
+    /**
+     * Two null objects are equal
+     */
+    @Test
+    public void testIsEqualObjectBothNull() {
+        assertDoesNotThrow(() -> Assert.isEqual((Object) null, (Object) null, TestException.class, MY_MESSAGE, LOG_MESSAGE));
+        assertThrows(TestException.class, () -> Assert.isEqual((Object) null, (Object) MY_MESSAGE, TestException.class, MY_MESSAGE, LOG_MESSAGE));
+        assertThrows(TestException.class, () -> Assert.isEqual((Object) MY_MESSAGE, (Object) null, TestException.class, MY_MESSAGE, LOG_MESSAGE));
+    }
+
+
+    /**
+     * The cause must be kept in case the exception can not be created
+     */
+    @Test
+    public void testExceptionCreationFailureKeepsCause() {
+        RuntimeException e = assertThrows(RuntimeException.class, () -> Assert.isTrue(false, FailingException.class, MY_MESSAGE, LOG_MESSAGE));
+        assertEquals(MY_MESSAGE, e.getMessage());
+        assertNotNull(e.getCause());
+    }
+
+
+    /**
+     * The stack trace of the thrown exception starts at the caller of the assertion, without internal frames
+     */
+    @Test
+    public void testStackTraceStartsAtCaller() {
+        TestException e1 = assertThrows(TestException.class, () -> Assert.isTrue(false, TestException.class, MY_MESSAGE));
+        assertStackTraceStartsAtCaller(e1);
+
+        TestException e2 = assertThrows(TestException.class, () -> Assert.isEqual((Object) null, (Object) MY_MESSAGE, TestException.class, MY_MESSAGE, LOG_MESSAGE));
+        assertStackTraceStartsAtCaller(e2);
+
+        // exception without a message constructor
+        NoMessageException e3 = assertThrows(NoMessageException.class, () -> Assert.isTrue(false, NoMessageException.class, MY_MESSAGE));
+        assertStackTraceStartsAtCaller(e3);
+    }
+
+
+    /**
+     * Asserts that the stack trace of an exception starts at this class and contains no element of {@link Assert}
+     *
+     * @param e the exception
+     */
+    private static void assertStackTraceStartsAtCaller(Exception e) {
+        StackTraceElement[] elements = e.getStackTrace();
+        assertEquals(AssertTest.class.getName(), elements[0].getClassName());
+        for (StackTraceElement element : elements) {
+            assertFalse(Assert.class.getName().equals(element.getClassName()), "Unexpected element: " + element);
+        }
+    }
+
+
+    /**
+     * Exception without a message constructor
+     */
+    public static class NoMessageException extends Exception {
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * Constructor for NoMessageException
+         */
+        public NoMessageException() {
+            super();
+        }
+    }
+
+
+    /**
+     * Exception which can not be created
+     */
+    public static class FailingException extends Exception {
+        private static final long serialVersionUID = 1L;
+
+        /**
+         * Constructor for FailingException
+         *
+         * @param message the message
+         * @throws IllegalStateException always
+         */
+        public FailingException(String message) {
+            super(message);
+            throw new IllegalStateException("Can not be created!");
         }
     }
 }

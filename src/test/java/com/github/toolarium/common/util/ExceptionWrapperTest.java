@@ -7,6 +7,8 @@ package com.github.toolarium.common.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.event.Level;
@@ -108,9 +110,38 @@ public class ExceptionWrapperTest {
         assertNotNull(newEx);
         assertEquals(newEx.getMessage(), t.getMessage());
         assertEquals(newEx.getLocalizedMessage(), t.getLocalizedMessage());
-        assertEquals(newEx.getCause(), t.getCause());
+        assertSame(t, newEx.getCause());
         assertEquals(newEx.toString(), t.toString().replace(t.getClass().getName(), newExceptionClass));
         assertEquals(newEx.getClass().getName(), newExceptionClass);
         return newEx;
+    }
+
+
+    /**
+     * The default exception handler can be created and extended
+     *
+     * @throws Exception in case of error
+     */
+    @Test
+    public void testCreateDefaultExceptionHandler() throws Exception {
+        IllegalStateException e = new IllegalStateException("test");
+        IllegalArgumentException ex = new ExceptionWrapper.DefaultExceptionHandler().createExceptionInstance(e, IllegalArgumentException.class);
+        checkExceptionCheck(e, ex);
+    }
+
+
+    /**
+     * Converting no exception (null) returns a new exception with a message and without a cause
+     */
+    @Test
+    public void testConvertNullException() {
+        IllegalStateException ex = ExceptionWrapper.getInstance().convertException(null, IllegalStateException.class);
+        assertNotNull(ex);
+        assertEquals("No exception given", ex.getMessage());
+        assertNull(ex.getCause());
+
+        RuntimeException rex = ExceptionWrapper.getInstance().convertException(null, RuntimeException.class, Level.WARN);
+        assertEquals("No exception given", rex.getMessage());
+        assertNull(rex.getCause());
     }
 }

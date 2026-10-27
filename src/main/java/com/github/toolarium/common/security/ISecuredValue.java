@@ -11,7 +11,8 @@ import javax.security.auth.Destroyable;
 
 /**
  * Defines a secured value
- * 
+ *
+ * @param <T> the type of the secured value
  * @author patrick
  */
 public interface ISecuredValue<T> extends Serializable, AutoCloseable, Destroyable {

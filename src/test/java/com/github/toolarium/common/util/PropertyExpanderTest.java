@@ -58,6 +58,7 @@ public class PropertyExpanderTest {
         assertEquals(PropertyExpander.getInstance().expand("my$$test"), "my$$test");
         assertEquals(PropertyExpander.getInstance().expand("my $$ test"), "my $$ test");
         assertEquals(PropertyExpander.getInstance().expand("my${$}test"), "my${$}test");
+        PropertyExpanderContextBasedProperties.unset();
     }
 
 
@@ -69,6 +70,7 @@ public class PropertyExpanderTest {
         Properties prop = new Properties();
         prop.setProperty("RW_ATTR", "runWith value");
         AtomicReference<String> captured = new AtomicReference<>();
+        PropertyExpanderContextBasedProperties.unset();
 
         PropertyExpanderContextBasedProperties.runWith(prop, () -> {
             captured.set(PropertyExpander.getInstance().expand("${RW_ATTR}"));
@@ -87,6 +89,7 @@ public class PropertyExpanderTest {
     public void testRunWithCleanupOnException() {
         Properties prop = new Properties();
         prop.setProperty("RW_ATTR2", "value");
+        PropertyExpanderContextBasedProperties.unset();
 
         try {
             PropertyExpanderContextBasedProperties.runWith(prop, () -> {
@@ -97,6 +100,42 @@ public class PropertyExpanderTest {
         }
 
         assertNull(PropertyExpanderContextBasedProperties.get());
+    }
+
+
+    /**
+     * Test that a reference which is not well-formed is kept unchanged, that a reference without braces ends at the
+     * first character which is not part of a name and that an empty value is a valid value.
+     */
+    @Test
+    public void testReferenceSyntaxAndEmptyValue() {
+        Properties prop = new Properties();
+        prop.setProperty("PE_HOME", "/opt/app");
+        prop.setProperty("app.name", "myapp");
+        prop.setProperty("PE_EMPTY", "");
+        PropertyExpanderContextBasedProperties.set(prop);
+        System.setProperty("PE_EMPTY", "system value");
+        try {
+            PropertyExpander expander = PropertyExpander.getInstance();
+
+            // not well-formed references are kept as they are
+            assertEquals("${PE_HOME bar}", expander.expand("${PE_HOME bar}"));
+            assertEquals("a ${PE_HOME   b", expander.expand("a ${PE_HOME   b"));
+            assertEquals("x ${  ", expander.expand("x ${  "));
+
+            // reference without braces
+            assertEquals("/opt/app/bin", expander.expand("$PE_HOME/bin"));
+            assertEquals("myapp:/opt/app", expander.expand("$app.name:$PE_HOME"));
+            assertEquals("/opt/app}", expander.expand("$PE_HOME}"));
+            assertEquals("/opt/app/bin", expander.expand("${PE_HOME}/bin"));
+
+            // an empty context property overrides the system property
+            assertEquals("[]", expander.expand("[$PE_EMPTY]"));
+            assertEquals("[]", expander.expand("[${PE_EMPTY}]"));
+        } finally {
+            PropertyExpanderContextBasedProperties.unset();
+            System.clearProperty("PE_EMPTY");
+        }
     }
 
 

@@ -7,8 +7,11 @@ package com.github.toolarium.common.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 
@@ -212,6 +215,20 @@ public class StringUtilTest {
 
     
     /**
+     * Test the split with leading and double separators
+     */
+    @Test
+    public void testSplitAsListLeadingSeparator() {
+        assertEquals(Arrays.asList("", "a", "b"), StringUtil.getInstance().splitAsList("/a/b", SLASH));
+        assertEquals(Arrays.asList("", "a", "..", "..", "etc"), StringUtil.getInstance().splitAsList("/a/../../etc", SLASH));
+        assertEquals(Arrays.asList("a", "", "b"), StringUtil.getInstance().splitAsList("a//b", SLASH));
+        assertEquals(Arrays.asList("", "1", "2"), StringUtil.getInstance().splitAsList("/@*1/@*2", "/@*"));
+        assertEquals(Arrays.asList(""), StringUtil.getInstance().splitAsList(SLASH, SLASH));
+        assertEquals(Arrays.asList(""), StringUtil.getInstance().splitAsList("", SLASH));
+    }
+
+    
+    /**
      * Test the split
      */
     @Test
@@ -368,6 +385,21 @@ public class StringUtilTest {
         assertEquals(NUMBERS, StringUtil.getInstance().toSnakeCase(NUMBERS));
     }
 
+    
+    /** 
+     * Test camel and snake case with consecutive separators
+     */
+    @Test
+    public void testConsecutiveSeparators() {
+        assertEquals("fooBar", StringUtil.getInstance().toCamelCase("FOO__BAR", true));
+        assertEquals("FooBar", StringUtil.getInstance().toCamelCase("FOO__BAR", false));
+        assertEquals("fooBarBaz", StringUtil.getInstance().toCamelCase("foo. bar__baz", true));
+        assertEquals("fooBar", StringUtil.getInstance().toCamelCase("_foo_bar", true));
+        assertEquals("FOO_BAR", StringUtil.getInstance().toSnakeCase("FOO__BAR"));
+        assertEquals("my_simple_example", StringUtil.getInstance().toSnakeCase("my  simple . example"));
+        assertEquals("foo", StringUtil.getInstance().toSnakeCase("_foo_"));
+    }
+
     // toCaml -> aSimple
     // toSnake > a_simple
     // fromCam > aSimple -> a_simple
@@ -410,6 +442,20 @@ public class StringUtilTest {
         assertEquals("THIS_IS_AN_EXAMPLE_", StringUtil.getInstance().fromCamelCaseToSnakeCase("This.is.an.example.", false));
         assertEquals("THIS_IS_AN_EXAMPLE_", StringUtil.getInstance().fromCamelCaseToSnakeCase("This.is.an.example.  ", false));
     }
+
+
+    /**
+     * Only an upper case letter starts a new word and separators are never doubled
+     */
+    @Test
+    public void testFromCamelCaseToSnakeCaseSeparators() {
+        assertEquals("foo_bar", StringUtil.getInstance().fromCamelCaseToSnakeCase("foo Bar", true));
+        assertEquals("my_var", StringUtil.getInstance().fromCamelCaseToSnakeCase("my_Var", true));
+        assertEquals("MY_VAR", StringUtil.getInstance().fromCamelCaseToSnakeCase("my_Var", false));
+        assertEquals("foo_bar", StringUtil.getInstance().fromCamelCaseToSnakeCase("foo. Bar", true));
+        assertEquals("version2_beta", StringUtil.getInstance().fromCamelCaseToSnakeCase("version2Beta", true));
+        assertEquals("日本語", StringUtil.getInstance().fromCamelCaseToSnakeCase("日本語", true)); // Japanese, no case
+    }
     
     
     /**
@@ -429,5 +475,72 @@ public class StringUtilTest {
 
         assertEquals("A2:01", StringUtil.getInstance().toString(new byte[] {(byte)0xA2, (byte)0x01 }));
         
+    }
+
+
+    /**
+     * Test new string builder with zero or negative repetitions
+     */
+    @Test
+    public void testNewStringBuilderNotPositive() {
+        assertEquals("", StringUtil.getInstance().newStringBuilder("ab", -1).toString());
+        assertEquals("", StringUtil.getInstance().newStringBuilder("ab", 0).toString());
+        assertEquals("abab", StringUtil.getInstance().newStringBuilder("ab", 2).toString());
+    }
+
+
+    /**
+     * Test the bounds check of the byte array to string conversion
+     */
+    @Test
+    public void testByteArrayToStringBounds() {
+        byte[] b = new byte[] {1, 2, 3};
+        assertEquals("02:03", StringUtil.getInstance().toString(b, 1, 2));
+        assertEquals("", StringUtil.getInstance().toString(b, 3, 0));
+        assertThrows(IllegalArgumentException.class, () -> StringUtil.getInstance().toString(b, -1, 2));
+        assertThrows(IllegalArgumentException.class, () -> StringUtil.getInstance().toString(b, 1, 3));
+        assertThrows(IllegalArgumentException.class, () -> StringUtil.getInstance().toString(b, 0, -1));
+    }
+
+    /**
+     * The split list can always be modified
+     */
+    @Test
+    public void testSplitAsListByLengthIsModifiable() {
+        List<String> shortList = StringUtil.getInstance().splitAsList("abc", 5);
+        shortList.add("x");
+        assertEquals(2, shortList.size());
+
+        List<String> longList = StringUtil.getInstance().splitAsList("abcdef", 2);
+        longList.add("x");
+        assertEquals(4, longList.size());
+    }
+
+
+    /**
+     * The case conversion does not depend on the default locale
+     */
+    @Test
+    public void testCaseConversionTurkishLocale() {
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr"));
+            assertEquals("Id", StringUtil.getInstance().changeFirstLetterToUpperCase("id"));
+            assertEquals("iD", StringUtil.getInstance().changeFirstLetterToLowerCase("ID"));
+            assertEquals("idName", StringUtil.getInstance().toCamelCase("ID_NAME", true));
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+
+    /**
+     * Test new string builder with a character does not overflow
+     */
+    @Test
+    public void testNewStringBuilderCharTooLarge() {
+        assertThrows(IllegalArgumentException.class, () -> StringUtil.getInstance().newStringBuilder('a', Integer.MAX_VALUE));
+        assertThrows(IllegalArgumentException.class, () -> StringUtil.getInstance().newString('a', Integer.MAX_VALUE));
+        assertEquals("aaa", StringUtil.getInstance().newStringBuilder('a', 3).toString());
     }
 }

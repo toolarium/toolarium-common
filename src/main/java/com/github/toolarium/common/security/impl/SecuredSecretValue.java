@@ -19,10 +19,13 @@ import java.util.function.Function;
  * on the Java heap — it lives in native memory and is deterministically zeroed when
  * {@link #close()} or {@link #destroy()} is called.
  *
+ * <p>Setting a secret and destroying it are atomic. Once destroyed (by {@link #close()}, {@link #destroy()},
+ * {@code setValue(null)} or by destroying the current {@link SecureSecret}), no new secret can be set.
+ *
  * <h2>Preferred usage</h2>
  * <pre>{@code
  * try (ISecuredSecretValue secret = SecuredValueFactory.getInstance().createSecret(passwordChars)) {
- *     // safe logging — toString() returns the mask
+ *     // safe logging: toString() returns the mask
  *     log.info("Credential: {}", secret);
  *
  *     // safe consumption — temporary copy is zeroed automatically
@@ -35,6 +38,7 @@ import java.util.function.Function;
  */
 public class SecuredSecretValue extends SecuredValue<SecureSecret> implements ISecuredSecretValue {
     private static final long serialVersionUID = 1L;
+    private static final String DESTROYED_MESSAGE = "SecuredSecretValue has been destroyed";
 
 
     /**
@@ -98,7 +102,7 @@ public class SecuredSecretValue extends SecuredValue<SecureSecret> implements IS
         Objects.requireNonNull(fn, "fn must not be null");
         SecureSecret s = getValue();
         if (s == null) {
-            throw new IllegalStateException("SecuredSecretValue has been destroyed");
+            throw new IllegalStateException(DESTROYED_MESSAGE);
         }
         return s.use(fn);
     }
@@ -119,9 +123,54 @@ public class SecuredSecretValue extends SecuredValue<SecureSecret> implements IS
         Objects.requireNonNull(fn, "fn must not be null");
         SecureSecret s = getValue();
         if (s == null) {
-            throw new IllegalStateException("SecuredSecretValue has been destroyed");
+            throw new IllegalStateException(DESTROYED_MESSAGE);
         }
         return s.useChars(fn);
+    }
+
+
+    /**
+     * Sets a new secret: the previous secret is destroyed (wiped) immediately. A {@code null} secret destroys
+     * this value.
+     *
+     * @param value the new secret
+     * @return the secured value
+     * @throws IllegalStateException if this value has already been closed or destroyed
+     * @see com.github.toolarium.common.security.impl.SecuredValue#setValue(java.lang.Object)
+     */
+    @Override
+    public synchronized SecuredValue<SecureSecret> setValue(SecureSecret value) {
+        assertNotDestroyed();
+        if (value == null) {
+            destroy();
+            return this;
+        }
+
+        destroyPreviousSecret(value);
+        return super.setValue(value);
+    }
+
+
+    /**
+     * Sets a new secret: the previous secret is destroyed (wiped) immediately. A {@code null} secret destroys
+     * this value.
+     *
+     * @param value the new secret
+     * @param securedValue the masked display value
+     * @return the secured value
+     * @throws IllegalStateException if this value has already been closed or destroyed
+     * @see com.github.toolarium.common.security.impl.SecuredValue#setValue(java.lang.Object, java.lang.String)
+     */
+    @Override
+    public synchronized SecuredValue<SecureSecret> setValue(SecureSecret value, String securedValue) {
+        assertNotDestroyed();
+        if (value == null) {
+            destroy();
+            return this;
+        }
+
+        destroyPreviousSecret(value);
+        return super.setValue(value, securedValue);
     }
 
 
@@ -129,7 +178,7 @@ public class SecuredSecretValue extends SecuredValue<SecureSecret> implements IS
      * @see com.github.toolarium.common.security.ISecuredValue#destroy()
      */
     @Override
-    public void destroy() {
+    public synchronized void destroy() {
         SecureSecret s = getValue();
         if (s != null && !s.isDestroyed()) {
             s.destroy();
@@ -161,5 +210,29 @@ public class SecuredSecretValue extends SecuredValue<SecureSecret> implements IS
         destroy();
     }
 
+    /**
+     * Ensures that this value has not been closed or destroyed: a destroyed value must not hold a live secret again.
+     * The current secret is null only while it is constructed or after it was destroyed.
+     *
+     * @throws IllegalStateException if this value has already been closed or destroyed
+     */
+    private void assertNotDestroyed() {
+        SecureSecret current = getValue();
+        if (super.isDestroyed() || (current != null && current.isDestroyed())) {
+            throw new IllegalStateException(DESTROYED_MESSAGE);
+        }
+    }
 
+
+    /**
+     * Destroys the current secret in case it is replaced by another one.
+     *
+     * @param newValue the new secret
+     */
+    private void destroyPreviousSecret(SecureSecret newValue) {
+        SecureSecret previous = getValue();
+        if (previous != null && previous != newValue && !previous.isDestroyed()) {
+            previous.destroy();
+        }
+    }
 }

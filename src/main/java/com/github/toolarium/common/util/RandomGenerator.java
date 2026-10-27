@@ -6,43 +6,76 @@
 package com.github.toolarium.common.util;
 
 import com.github.toolarium.common.ByteArray;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Date;
+import java.util.UUID;
 
 
 /**
  * This class implements some helper methods for random numbers. It works internal with the SecureRandom class.
+ * All methods are thread safe, they rely on the thread safety of {@link SecureRandom} and do not block each other.
  *
  * @author patrick
  */
 public final class RandomGenerator {
     
-    /** Defines valid number characters */
+    /**
+     * Defines valid number characters.
+     *
+     * @deprecated the content of the array can be changed by everybody, use {@link #getValidNumberCharacters()}
+     */
+    @Deprecated
     public static final char[] validNumberCharacters = new char[] {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
 
-    /** Defines valid lower case letter characters */
+    /**
+     * Defines valid lower case letter characters.
+     *
+     * @deprecated the content of the array can be changed by everybody, use {@link #getValidLowerCaseLetterCharacters()}
+     */
+    @Deprecated
     public static final char[] validLowerCaseLetterCharacters = new char[] {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
 
-    /** Defines valid upper case letter characters */
+    /**
+     * Defines valid upper case letter characters.
+     *
+     * @deprecated the content of the array can be changed by everybody, use {@link #getValidUpperCaseLetterCharacters()}
+     */
+    @Deprecated
     public static final char[] validUpperCaseLetterCharacters = new char[] {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z' };
 
-    /** Defines valid letter characters */
+    /**
+     * Defines valid letter characters.
+     *
+     * @deprecated the content of the array can be changed by everybody, use {@link #getValidLetterCharacters()}
+     */
+    @Deprecated
     public static final char[] validLetterCharacters = combineValidCharacters(validLowerCaseLetterCharacters, validUpperCaseLetterCharacters);
 
-    /** Defines valid number and letter characters */
+    /**
+     * Defines valid number and letter characters.
+     *
+     * @deprecated the content of the array can be changed by everybody, use {@link #getValidNumberLetterCharacters()}
+     */
+    @Deprecated
     public static final char[] validNumberLetterCharacters = combineValidCharacters(validNumberCharacters, validLetterCharacters);
 
     /** The miliseconds of a day */
     public static final long ONE_DAY = 24 * 60 * 60 * 1000;
 
-    //private static Logger log = Logger.getLogger( RandomGenerator.class );
-    private SecureRandom secureRandom;
-    private String sid;
+    /** Private copies of the characters, so that changes of the public (deprecated) arrays have no effect */
+    private static final char[] NUMBER_CHARACTERS = validNumberCharacters.clone();
+    private static final char[] LOWER_CASE_LETTER_CHARACTERS = validLowerCaseLetterCharacters.clone();
+    private static final char[] UPPER_CASE_LETTER_CHARACTERS = validUpperCaseLetterCharacters.clone();
+    private static final char[] LETTER_CHARACTERS = validLetterCharacters.clone();
+    private static final char[] NUMBER_LETTER_CHARACTERS = validNumberLetterCharacters.clone();
 
-    
+    private final SecureRandom secureRandom;
+    private final String sid;
+
+
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
      *
@@ -52,15 +85,30 @@ public final class RandomGenerator {
         static final RandomGenerator INSTANCE = new RandomGenerator();
     }
 
+
     /**
      * Constructor
      */
     private RandomGenerator() {
-        secureRandom = new SecureRandom();
+        this(new SecureRandom());
     }
 
+
     /**
-     * Get the instance
+     * Constructor
+     *
+     * @param secureRandom the secure random instance to use
+     */
+    private RandomGenerator(SecureRandom secureRandom) {
+        this.secureRandom = secureRandom;
+
+        // random instance id instead of the host name: no (possibly blocking) DNS lookup is needed
+        this.sid = Long.toHexString(secureRandom.nextLong()) + Long.toHexString(secureRandom.nextLong());
+    }
+
+
+    /**
+     * Get the (shared) instance
      *
      * @return the instance
      */
@@ -68,27 +116,80 @@ public final class RandomGenerator {
         return HOLDER.INSTANCE;
     }
 
-    
+
     /**
-     * Gets a secure random instance
-     * 
-     * @param random initialize the random generator with the given secure random instance.
-     * @return the instance
+     * Creates a new, independent (non-singleton) random generator which uses the given secure random instance.
+     * The shared instance returned by {@link #getInstance()} is not modified.
+     *
+     * @param random the secure random instance to use, in case of null a new {@link SecureRandom} is used.
+     * @return a new random generator instance
      */
-    public static synchronized RandomGenerator getInstance(SecureRandom random) {
-        RandomGenerator instance = getInstance();
-        instance.secureRandom = random;
-        return instance;
+    public static RandomGenerator getInstance(SecureRandom random) {
+        if (random == null) {
+            return new RandomGenerator();
+        }
+
+        return new RandomGenerator(random);
     }
 
-    
+
     /**
      * Returns the secure random instance
-     * 
+     *
      * @return secure random instance
      */
-    public synchronized SecureRandom getSecureRandom() {
+    public SecureRandom getSecureRandom() {
         return secureRandom;
+    }
+
+
+    /**
+     * Get the valid number characters.
+     *
+     * @return a copy of the valid number characters
+     */
+    public char[] getValidNumberCharacters() {
+        return NUMBER_CHARACTERS.clone();
+    }
+
+
+    /**
+     * Get the valid lower case letter characters.
+     *
+     * @return a copy of the valid lower case letter characters
+     */
+    public char[] getValidLowerCaseLetterCharacters() {
+        return LOWER_CASE_LETTER_CHARACTERS.clone();
+    }
+
+
+    /**
+     * Get the valid upper case letter characters.
+     *
+     * @return a copy of the valid upper case letter characters
+     */
+    public char[] getValidUpperCaseLetterCharacters() {
+        return UPPER_CASE_LETTER_CHARACTERS.clone();
+    }
+
+
+    /**
+     * Get the valid letter characters.
+     *
+     * @return a copy of the valid letter characters
+     */
+    public char[] getValidLetterCharacters() {
+        return LETTER_CHARACTERS.clone();
+    }
+
+
+    /**
+     * Get the valid number and letter characters.
+     *
+     * @return a copy of the valid number and letter characters
+     */
+    public char[] getValidNumberLetterCharacters() {
+        return NUMBER_LETTER_CHARACTERS.clone();
     }
 
 
@@ -97,7 +198,7 @@ public final class RandomGenerator {
      * 
      * @return random Boolean
      */
-    public synchronized Boolean getBooleanRandom() {
+    public Boolean getBooleanRandom() {
         return Boolean.valueOf(secureRandom.nextBoolean());
     }
     
@@ -107,7 +208,7 @@ public final class RandomGenerator {
      * 
      * @return random Integer
      */
-    public synchronized Integer getIntegerRandom() {
+    public Integer getIntegerRandom() {
         return Integer.valueOf(secureRandom.nextInt());
     }
     
@@ -117,7 +218,7 @@ public final class RandomGenerator {
      * 
      * @return random Long
      */
-    public synchronized Long getLongRandom() {
+    public Long getLongRandom() {
         return Long.valueOf(secureRandom.nextLong());
     }    
     
@@ -127,7 +228,7 @@ public final class RandomGenerator {
      * 
      * @return random Float
      */
-    public synchronized Float getFloatRandom() {
+    public Float getFloatRandom() {
         return Float.valueOf(secureRandom.nextFloat());
     }
 
@@ -137,7 +238,7 @@ public final class RandomGenerator {
      * 
      * @return random Double
      */
-    public synchronized Double getDoubleRandom() {
+    public Double getDoubleRandom() {
         return Double.valueOf(secureRandom.nextDouble());
     }
 
@@ -153,13 +254,13 @@ public final class RandomGenerator {
 
 
     /**
-     * Returns a random string
-     * 
+     * Returns a random string of exactly <code>size</code> characters, which consists of numbers and letters ([0-9a-zA-Z]).
+     *
      * @param size the size of the string
      * @return random string
      */
     public String getRandomString(int size) {
-        return new String(nextBytes(size));
+        return getRandomString(size, NUMBER_LETTER_CHARACTERS);
     }
 
     
@@ -169,9 +270,14 @@ public final class RandomGenerator {
      * @param size the size of the string
      * @param validCharacters the valid characters for the random string
      * @return random string
+     * @throws IllegalArgumentException in case the valid characters are null or empty
      */
-    public synchronized String getRandomString(int size, char[] validCharacters) {
-        StringBuilder randomString = new StringBuilder();
+    public String getRandomString(int size, char[] validCharacters) {
+        if (validCharacters == null || validCharacters.length == 0) {
+            throw new IllegalArgumentException("Invalid empty valid characters!");
+        }
+
+        StringBuilder randomString = new StringBuilder(Math.max(size, 0));
         while (randomString.length() < size) {
             randomString.append(validCharacters[secureRandom.nextInt(validCharacters.length)]);
         }
@@ -182,10 +288,14 @@ public final class RandomGenerator {
     /**
      * Gets random bytes
      * 
-     * @param size the size of the random bytes
+     * @param size the size of the random bytes, in case of a negative size an empty array is returned
      * @return the instance
      */
-    public synchronized byte[] nextBytes(int size) {
+    public byte[] nextBytes(int size) {
+        if (size <= 0) {
+            return new byte[0];
+        }
+
         byte[] bytes = new byte[size];
         secureRandom.nextBytes(bytes);
         return bytes;
@@ -210,63 +320,73 @@ public final class RandomGenerator {
      * encryption where the element of randomness is important.
      * This method was written for these purposes but can also be used
      * as a general purpose GUID generator as well. It generates truly
-     * random GUIDs by using the system's IP address (name/IP), system time in
+     * random GUIDs by using a random instance id (created once), system time in
      * milliseconds (as an integer), and a very large random number joined
-     * together in a single String that is passed through an MD5 hash. The IP
-     * address and system time make the MD5 seed globally unique and the random
+     * together in a single String that is passed through a SHA-256 hash. The instance
+     * id and system time make the SHA-256 seed globally unique and the random
      * number guarantees that the generated GUIDs will have no discernable
      * pattern and cannot be guessed given any number of previously generated
-     * GUIDs. It is generally not possible to access the seed information (IP,
-     * time, random number) from the resulting GUIDs as the MD5 hash algorithm
+     * GUIDs. It is generally not possible to access the seed information (instance id,
+     * time, random number) from the resulting GUIDs as the SHA-256 hash algorithm
      * provides one way encryption.
      *
-     * @return a unique GUID
+     * @return a unique GUID as lower case hex string (64 characters)
+     * @throws IllegalStateException in case the SHA-256 algorithm is not available
      */
     public String createGUID() {
-        initializeSID();
-
-        StringBuffer guid = new StringBuffer();
+        StringBuilder guid = new StringBuilder();
         guid.append(sid);
         guid.append(":");
         guid.append(Long.toString(System.currentTimeMillis()));
         guid.append(":");
         guid.append(Long.toString(getLongRandom()));
 
+        final MessageDigest msgDigest;
         try {
-            StringBuffer result = new StringBuffer();
-            
-            
-            MessageDigest msgDigest = MessageDigest.getInstance("sha-256");
-            msgDigest.update(guid.toString().getBytes());
-            byte[] array = msgDigest.digest();
-            for (int j = 0; j < array.length; ++j) {
-                int b = array[j] & 0xFF;
-                if (b < 0x10) {
-                    result.append('0');
-                }
-                result.append(Integer.toHexString(b));
-            }
-
-            return result.toString();
-        } catch (Exception e) {
-            // NOP
+            msgDigest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Could not create GUID: " + e.getMessage(), e);
         }
 
-        return null;
+        byte[] array = msgDigest.digest(guid.toString().getBytes(StandardCharsets.UTF_8));
+        StringBuilder result = new StringBuilder(array.length * 2);
+        for (int j = 0; j < array.length; ++j) {
+            int b = array[j] & 0xFF;
+            if (b < 0x10) {
+                result.append('0');
+            }
+            result.append(Integer.toHexString(b));
+        }
+
+        return result.toString();
     }
 
 
     /**
-     * Creates a UUID
+     * Creates a random UUID (RFC 4122 version 4) in the format 8-4-4-4-12 (lower case hex), e.g. <code>3f2b8c1e-7d4a-4f0e-9b6c-1a2b3c4d5e6f</code>.
      *
      * @return the uuid
      */
     public String createUUID() {
-        final String guid = createGUID();
-        return "" + guid.substring(0, 8) + "-" + guid.substring(8, 12) + "-" + guid.substring(12, 16) + "-" + guid.substring(16, 20) + "-" + guid.substring(20);
+        byte[] data = nextBytes(16);
+        data[6] &= 0x0f; // clear version
+        data[6] |= 0x40; // set to version 4
+        data[8] &= 0x3f; // clear variant
+        data[8] |= (byte) 0x80; // set to IETF variant
+
+        long msb = 0;
+        long lsb = 0;
+        for (int i = 0; i < 8; i++) {
+            msb = (msb << 8) | (data[i] & 0xff);
+        }
+        for (int i = 8; i < 16; i++) {
+            lsb = (lsb << 8) | (data[i] & 0xff);
+        }
+
+        return new UUID(msb, lsb).toString();
     }
 
-    
+
     /**
      * Get a date in the future
      * 
@@ -311,59 +431,70 @@ public final class RandomGenerator {
 
     
     /**
-     * Gets a random long number
-     * 
-     * @param range the range of the long. As example the range 5 means a random number between 1 and 5.
-     * @param allowZero true if zero should also included into the range. As example the range 5 means a random number between 0 and 4.
+     * Gets a random long number. The sign of the range is ignored. The distribution is uniform (no modulo bias).
+     *
+     * @param range the range of the long. As example the range 5 means a random number between 1 and 5 (both inclusive).
+     *        The range {@link Long#MIN_VALUE} is handled as {@link Long#MAX_VALUE}.
+     *        In case of range 0 the result is 1, respective 0 if zero is allowed.
+     * @param allowZero true if zero should also included into the range. As example the range 5 means a random number between 0 and 4 (both inclusive).
      * @return the random number
      */
     public long getRandomNumber(long range, boolean allowZero) {
-        long s = range;
-
-        if (s < 0) {
-            s = s * -1;
+        long bound = range;
+        if (bound == Long.MIN_VALUE) {
+            bound = Long.MAX_VALUE;
+        } else if (bound < 0) {
+            bound = -bound;
         }
 
-        if (range == 0) {
+        if (bound == 0) {
             if (!allowZero) {
                 return 1;
             }
             return 0;
         }
 
-        if (range == 1 && !allowZero) {
-            return 1;
-        }
-
-        long r = -1;
-
-        if (allowZero) {
-            s++;
-        }
-
-        synchronized (secureRandom) {
-            while (r <= 0) {
-                r = Math.abs(secureRandom.nextLong() % s);
-            }
-        }
-
-        if (allowZero) {
-            r--;
+        long r = nextLong(bound);
+        if (!allowZero) {
+            r++;
         }
 
         return r;
     }
 
-    
+
+    /**
+     * Gets a uniform distributed random number between 0 (inclusive) and the bound (exclusive) by using rejection sampling.
+     *
+     * @param bound the bound, must be positive
+     * @return the random number
+     */
+    private long nextLong(long bound) {
+        long bits;
+        long val;
+        do {
+            bits = secureRandom.nextLong() >>> 1;
+            val = bits % bound;
+        } while (bits - val + (bound - 1) < 0); // reject values of the incomplete last block (overflow check)
+
+        return val;
+    }
+
+
     /**
      * Method to test the randomness of the random algorithm.
      *
      * @param number numbers of positiv numbers
      * @param size the numbers are less the size
      * @return the chis-quare. If chis-quare is in the range from 2*sqr(size) to size, then the algorithm has a good randomness in case the number is 10*size.
+     * @throws IllegalArgumentException in case the number or the size is not positive
      */
     public float chisQuare(int number, int size) {
-        int t = 0;
+        if (number <= 0 || size <= 0) {
+            throw new IllegalArgumentException("Invalid number or size, both must be positive: " + number + ", " + size);
+        }
+
+        long t = 0;
         int[] f = new int[size];
         byte[] init = {1, 2, 3, 4, 5, 6, 7 };
         SecureRandom x = new SecureRandom(init);
@@ -373,10 +504,10 @@ public final class RandomGenerator {
         }
 
         for (int i = 0; i < size; i++) {
-            t += f[i] * f[i];
+            t += (long) f[i] * f[i];
         }
 
-        return ((size * t / number) - number);
+        return (float) (((double) size * t / number) - number);
     }
 
     
@@ -400,23 +531,5 @@ public final class RandomGenerator {
         }
 
         return result;
-    }
-
-    
-    /**
-     * Initialize the sid
-     */
-    private void initializeSID() {
-        if (sid == null) {
-            synchronized (this) {
-                if (sid == null) {
-                    try {
-                        sid = InetAddress.getLocalHost().toString();
-                    } catch (UnknownHostException e) {
-                        sid = "localhost-" + secureRandom.nextLong();
-                    }
-                }
-            }
-        }
     }
 }

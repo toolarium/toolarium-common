@@ -9,7 +9,8 @@ package com.github.toolarium.common.compare.map;
 /**
  * A difference between the mappings from two maps with the same key. The {@link #leftValue} and {@link #rightValue}
  * are not equal, and one but not both of them may be null.
- * 
+ *
+ * @param <V> the value type
  * @author patrick
  */
 public interface IValueDifference<V> {

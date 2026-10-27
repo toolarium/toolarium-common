@@ -8,6 +8,9 @@ package com.github.toolarium.common.security;
 import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -100,11 +103,14 @@ public final class SecureSecret implements AutoCloseable, Destroyable {
      */
     public SecureSecret(byte[] secret) {
         Objects.requireNonNull(secret, "secret must not be null");
-        capacity = secret.length;
-        buffer = ByteBuffer.allocateDirect(capacity);
-        buffer.put(secret);
-        buffer.flip();
-        Arrays.fill(secret, (byte) 0);
+        try {
+            capacity = secret.length;
+            buffer = ByteBuffer.allocateDirect(capacity);
+            buffer.put(secret);
+            buffer.flip();
+        } finally {
+            Arrays.fill(secret, (byte) 0); // wipe the input also in case of an error
+        }
         cleanable = CLEANER.register(this, new ZeroAction(buffer, capacity));
     }
 
@@ -118,20 +124,27 @@ public final class SecureSecret implements AutoCloseable, Destroyable {
      * <p>All intermediate heap buffers produced during UTF-8 encoding are zeroed before
      * this constructor returns, regardless of whether they have an accessible backing array.
      *
+     * <p>Malformed input (a lone surrogate character) is rejected, since it can not be encoded as UTF-8
+     * without loss. Also in this case {@code secret} is zeroed before the exception is thrown.
+     *
      * @param secret the sensitive characters to protect; must not be {@code null}
      * @throws NullPointerException if {@code secret} is {@code null}
+     * @throws IllegalArgumentException if {@code secret} contains a lone surrogate character or is too large
      */
     public SecureSecret(char[] secret) {
         Objects.requireNonNull(secret, "secret must not be null");
-        ByteBuffer encoded = StandardCharsets.UTF_8.encode(CharBuffer.wrap(secret));
+        ByteBuffer encoded = null;
         try {
+            encoded = encodeUtf8(secret);
             buffer = ByteBuffer.allocateDirect(encoded.remaining());
             capacity = buffer.capacity();
             buffer.put(encoded);
             buffer.flip();
         } finally {
-            Arrays.fill(secret, '\0');
-            wipeByteBuffer(encoded);
+            Arrays.fill(secret, '\0'); // wipe the input also in case the encoding fails
+            if (encoded != null) {
+                wipeByteBuffer(encoded);
+            }
         }
         cleanable = CLEANER.register(this, new ZeroAction(buffer, capacity));
     }
@@ -456,6 +469,40 @@ public final class SecureSecret implements AutoCloseable, Destroyable {
     }
 
     /**
+     * Encodes the given characters as UTF-8 into a single heap buffer which is sized up front, so that no
+     * intermediate (not wiped) copies are created during the encoding. Malformed or unmappable characters
+     * (lone surrogates) are rejected; the partially encoded buffer is wiped before the exception is thrown.
+     *
+     * @param secret the characters to encode
+     * @return the encoded bytes (position 0, limit at the end of the data); the caller must wipe it
+     * @throws IllegalArgumentException in case the secret is too large or contains malformed characters
+     */
+    private static ByteBuffer encodeUtf8(char[] secret) {
+        CharsetEncoder encoder = StandardCharsets.UTF_8.newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        long maxSize = (long) Math.ceil((double) encoder.maxBytesPerChar() * secret.length);
+        if (maxSize > Integer.MAX_VALUE - 8) {
+            throw new IllegalArgumentException("Secret is too large!");
+        }
+
+        ByteBuffer encoded = ByteBuffer.allocate((int) maxSize);
+        CharBuffer input = CharBuffer.wrap(secret);
+        CoderResult result = encoder.encode(input, encoded, true);
+        if (!result.isError()) {
+            result = encoder.flush(encoded);
+        }
+
+        if (result.isError()) {
+            wipeByteBuffer(encoded);
+            throw new IllegalArgumentException("Secret contains malformed characters (lone surrogate) at position " + input.position() + "!");
+        }
+
+        encoded.flip();
+        return encoded;
+    }
+
+    /**
      * Zeros all bytes in {@code buf}, using the backing array if available and absolute
      * index puts otherwise, to handle both heap and direct buffers.
      *
@@ -520,6 +567,9 @@ public final class SecureSecret implements AutoCloseable, Destroyable {
             this.capacity = capacity;
         }
 
+        /**
+         * @see java.lang.Runnable#run()
+         */
         @Override
         public void run() {
             for (int i = 0; i < capacity; i++) {

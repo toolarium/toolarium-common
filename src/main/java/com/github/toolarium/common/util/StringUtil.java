@@ -7,6 +7,7 @@ package com.github.toolarium.common.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * String util class
@@ -51,14 +52,24 @@ public final class StringUtil {
      * 
      * @param input the input string to repeat
      * @param num the number of repetitions
-     * @return the prepared string
+     * @return the prepared string; empty if num is zero or negative
+     * @throws IllegalArgumentException In case the resulting string would be too large
      */
     public StringBuilder newStringBuilder(CharSequence input, int num) {
         if (input == null) {
             return null;
         }
 
-        StringBuilder buffer = new StringBuilder(num * input.length() + 1);
+        if (num <= 0) {
+            return new StringBuilder();
+        }
+
+        long capacity = (long) num * input.length() + 1;
+        if (capacity > Integer.MAX_VALUE - 8) {
+            throw new IllegalArgumentException("The resulting string is too large (" + num + " x " + input.length() + ")!");
+        }
+
+        StringBuilder buffer = new StringBuilder((int) capacity);
         for (int j = 0; j < num; j++) {
             buffer.append(input);
         }
@@ -72,14 +83,20 @@ public final class StringUtil {
      * 
      * @param num the number of repetitions
      * @param character character to fill up the string
-     * @return a filled up string
-     */     
+     * @return a filled up string; empty if num is zero or negative
+     * @throws IllegalArgumentException In case the resulting string would be too large
+     */
     public StringBuilder newStringBuilder(char character, int num) {
         if (num <= 0) {
             return new StringBuilder();
         }
 
-        StringBuilder result = new StringBuilder(num + 1);
+        long capacity = (long) num + 1;
+        if (capacity > Integer.MAX_VALUE - 8) {
+            throw new IllegalArgumentException("The resulting string is too large (" + num + ")!");
+        }
+
+        StringBuilder result = new StringBuilder((int) capacity);
         for (int i = 0; i < num; i++) {
             result.append(character);
         }
@@ -129,12 +146,12 @@ public final class StringUtil {
      *   input: 
      *      text:       "fobar"
      *      width:      8
-     *      fillupChar: '-'
-     *      cutRight: false
      *   output:
-     *      fobar---
-     * </pre> 
-     * @param text the string to test    
+     *      "fobar   "
+     * </pre>
+     * It fills up with blanks and cuts on the right side if the text is too long.
+     *
+     * @param text the string to test
      * @param width the width of the string
      * @return the formated string
      */
@@ -154,8 +171,10 @@ public final class StringUtil {
      *      cutRight: false
      *   output:
      *      fobar---
-     * </pre> 
-     * @param text the string to test    
+     * </pre>
+     * If the text is longer than width, it is cut on the right side (cutRight true) or on the left side (cutRight false).
+     *
+     * @param text the string to test
      * @param width the width of the string
      * @param fillupChar character to fill up the string
      * @param cutRight if the given string is too long then cut it on the right side
@@ -400,12 +419,17 @@ public final class StringUtil {
      * @param ofs the offset
      * @param len the length of the bytes
      * @return bytes as string
+     * @throws IllegalArgumentException In case of an invalid offset or length
      */
     public String toString(byte[] b, int ofs, int len) {
         if (b == null) {
             return "(null)";
         }
         
+        if (ofs < 0 || len < 0 || ofs > b.length - len) {
+            throw new IllegalArgumentException("Invalid offset (" + ofs + ") or length (" + len + ") for an array of length " + b.length + "!");
+        }
+
         StringBuilder sb = new StringBuilder(len * 3);
         for (int i = 0; i < len; i++) {
             int c = b[ofs + i] & 0xff;
@@ -434,7 +458,9 @@ public final class StringUtil {
         }
 
         if (partLength <= 0 || splitString.length() <= partLength) {
-            return List.of(splitString);
+            List<String> result = new ArrayList<String>(1);
+            result.add(splitString);
+            return result;
         }
 
         int len = splitString.length();
@@ -452,8 +478,10 @@ public final class StringUtil {
 
     
     /**
-     * Split a string into a list 
-     * 
+     * Split a string into a list. Empty parts between two separators are kept and an expression which starts
+     * with the separator results in a leading empty part (e.g. <code>"/a/b"</code> results in <code>["", "a", "b"]</code>).
+     * A single trailing separator does not produce a trailing empty part (e.g. <code>"a/"</code> results in <code>["a"]</code>).
+     *
      * @param expression the expression to split
      * @param splitString the string, whereby the expression string is split
      * @return the string list or null
@@ -462,7 +490,7 @@ public final class StringUtil {
         if (expression == null) {
             return null;
         }
-        
+
         List<String> result = new ArrayList<String>();
         if (splitString == null) {
             result.add(expression);
@@ -474,21 +502,14 @@ public final class StringUtil {
             int start = 0;
             int splitLength = splitString.length();
             int i = expression.indexOf(splitString, start);
-            if (i > 0) {
-                while (i >= 0 && i <= expression.length()) {
-                    i = expression.indexOf(splitString, start);
+            while (i >= 0) {
+                result.add(expression.substring(start, i));
+                start = i + splitLength;
+                i = expression.indexOf(splitString, start);
+            }
 
-                    if (i > 0) {
-                        result.add(expression.substring(start, i));
-                        start = i + splitLength;
-                    }
-                }
-
-                if (start > 0 && start < expression.length()) {
-                    result.add(expression.substring(start));
-                }
-            } else {
-                result.add(expression);
+            if (start < expression.length() || result.isEmpty()) {
+                result.add(expression.substring(start));
             }
         }
 
@@ -546,7 +567,7 @@ public final class StringUtil {
         }
 
         StringBuilder changedName = new StringBuilder();
-        changedName.append(name.substring(0, 1).toUpperCase());
+        changedName.append(name.substring(0, 1).toUpperCase(Locale.ROOT));
         changedName.append(name.substring(1, name.length()));
 
         return changedName.toString();
@@ -565,7 +586,7 @@ public final class StringUtil {
         }
 
         StringBuilder changedName = new StringBuilder();
-        changedName.append(name.substring(0, 1).toLowerCase());
+        changedName.append(name.substring(0, 1).toLowerCase(Locale.ROOT));
         changedName.append(name.substring(1, name.length()));
 
         return changedName.toString();
@@ -599,20 +620,20 @@ public final class StringUtil {
                 if (buffer != null && buffer.length() > 0) {
                     String txt = buffer.toString();
                     buffer = new StringBuilder();
-                    if (txt.toUpperCase().equals(txt)) {
-                        txt = txt.toLowerCase();
+                    if (txt.toUpperCase(Locale.ROOT).equals(txt)) {
+                        txt = txt.toLowerCase(Locale.ROOT);
                     }
     
                     if (result.length() == 0) {
                         if (startWithLowerCase) {
-                            result.append(txt.toLowerCase());
+                            result.append(txt.toLowerCase(Locale.ROOT));
                         } else {
                             result.append(changeFirstLetterToUpperCase(txt));
                         }
                     } else {
                         result.append(changeFirstLetterToUpperCase(txt));
                     }
-                } else {
+                } else if (i >= d.length()) {
                     buffer = null;
                 }
             }
@@ -642,26 +663,17 @@ public final class StringUtil {
             return "";
         }
 
+        // only an upper case letter starts a new word; a space, dot or underscore separates words; separators are never doubled
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < d.length(); i++) {
             final char ch = d.charAt(i);
-            if (Character.isSpaceChar(ch) || ch == '.') {
-                result.append('_');
-            } else if (i > 0 && Character.isLetter(ch) && ch == Character.toUpperCase(ch)) {
-                result.append('_');
-
-                if (toLowerCase) {
-                    result.append(Character.toLowerCase(ch));
-                } else {
-                    result.append(Character.toUpperCase(ch));
-                }
-            } else if (ch == Character.toLowerCase(ch)) {
-                if (toLowerCase) {
-                    result.append(Character.toLowerCase(ch));
-                } else {
-                    result.append(Character.toUpperCase(ch));
-                }
+            if (Character.isSpaceChar(ch) || ch == '.' || ch == '_') {
+                appendSnakeCaseSeparator(result);
             } else {
+                if (i > 0 && Character.isUpperCase(ch)) {
+                    appendSnakeCaseSeparator(result);
+                }
+
                 if (toLowerCase) {
                     result.append(Character.toLowerCase(ch));
                 } else {
@@ -671,6 +683,18 @@ public final class StringUtil {
         }
 
         return result.toString();
+    }
+
+
+    /**
+     * Append the snake case separator (underscore) if the result does not already end with it
+     *
+     * @param result the result
+     */
+    private void appendSnakeCaseSeparator(StringBuilder result) {
+        if (result.length() == 0 || result.charAt(result.length() - 1) != '_') {
+            result.append('_');
+        }
     }
 
     
@@ -707,7 +731,7 @@ public final class StringUtil {
         
                         result.append(txt);
                     }
-                } else {
+                } else if (i >= d.length()) {
                     buffer = null;
                 }
             }

@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -60,6 +61,7 @@ public final class DateUtil {
      * @param month the month (January starts with 0)
      * @param day the day (start with 1)
      * @return the date
+     * @throws IllegalArgumentException In case of an invalid date, e.g. 30 February
      */
     public Date createDate(int year, int month, int day) {
         return createTimeStamp(year, month, day, 0, 0, 0, 0);
@@ -73,6 +75,7 @@ public final class DateUtil {
      * @param month the month January starts with 0)
      * @param day the day (start with 1)
      * @return the date
+     * @throws IllegalArgumentException In case of an invalid date, e.g. 30 February
      */
     public Date createTimeStamp(int year, int month, int day) {
         final Calendar cal = Calendar.getInstance();
@@ -91,10 +94,12 @@ public final class DateUtil {
      * @param sec the seconds
      * @param miliSec the milliseconds
      * @return the date
+     * @throws IllegalArgumentException In case of an invalid date or time, e.g. 30 February or the hour 25
      */
     public Date createTimeStamp(int year, int month, int day, int hour, int min, int sec, int miliSec) {
         //return toDate(LocalDateTime.of(year, month + 1, day, hour, min, sec, miliSec * 1000));
         final Calendar cal = Calendar.getInstance();
+        cal.setLenient(false);
         cal.set(Calendar.YEAR, year);
         cal.set(Calendar.MONTH, month);
         cal.set(Calendar.DAY_OF_MONTH, day);
@@ -102,8 +107,12 @@ public final class DateUtil {
         cal.set(Calendar.MINUTE, min);
         cal.set(Calendar.SECOND, sec);
         cal.set(Calendar.MILLISECOND, miliSec);
-        return cal.getTime();
 
+        try {
+            return cal.getTime();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid date: " + year + "-" + (month + 1) + "-" + day + " " + hour + ":" + min + ":" + sec + "." + miliSec);
+        }
     }
     
     
@@ -163,22 +172,40 @@ public final class DateUtil {
             return null;
         }
 
+        int[] timeFields = parseTimeFields(time);
         Calendar cal = Calendar.getInstance();
-        String[] split = time.split(":");
-        if (split == null || split.length <= 0 || split.length < 1) {
+        cal.setLenient(false);
+        setTimeFields(cal, timeFields);
+
+        try {
+            return cal.getTime();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid start time: " + time);
+        }
+    }
+
+
+    /**
+     * Parse the time fields
+     * 
+     * @param time the time to parse like: 11:22
+     * @return the parsed time fields: hour, minute, second and millisecond
+     * @throws IllegalArgumentException In case of invalid time format
+     */
+    private int[] parseTimeFields(String time) {
+        // keep empty parts (e.g. "10:"), they are invalid like additional parts (e.g. "10:00:00:99")
+        String[] split = time.trim().split(":", -1);
+        if (split.length < 1 || split.length > 3) {
             throw new IllegalArgumentException("Invalid start time: " + time);
         }
 
-        int hour = cal.get(Calendar.HOUR_OF_DAY);
-        int minute = cal.get(Calendar.MINUTE);
-        int second = cal.get(Calendar.SECOND);
+        int hour = 0;
+        int minute = 0;
+        int second = 0;
         int miliSecond = 0;
 
         try {
             hour = Integer.parseInt(split[0]);
-            minute = 0;
-            second = 0;
-            miliSecond = 0;
             
             if (split.length > 1) {
                 minute = Integer.parseInt(split[1]);
@@ -189,7 +216,7 @@ public final class DateUtil {
                         second = Integer.parseInt(split[0]);
     
                         if (split.length > 1) {
-                            miliSecond = Integer.parseInt(split[1]);
+                            miliSecond = parseFractionOfSecond(split[1]);
                         }
                     } else {
                         second = Integer.parseInt(secStr);
@@ -200,12 +227,42 @@ public final class DateUtil {
             throw new IllegalArgumentException("Invalid start time: " + time);
         }
 
-        cal.set(Calendar.HOUR_OF_DAY, hour);
-        cal.set(Calendar.MINUTE, minute);
-        cal.set(Calendar.SECOND, second);
-        cal.set(Calendar.MILLISECOND, miliSecond);
+        return new int[] {hour, minute, second, miliSecond};
+    }
 
-        return cal.getTime();
+
+    /**
+     * Set the time fields into the calendar
+     * 
+     * @param cal the calendar
+     * @param timeFields the time fields: hour, minute, second and millisecond
+     */
+    private void setTimeFields(Calendar cal, int[] timeFields) {
+        cal.set(Calendar.HOUR_OF_DAY, timeFields[0]);
+        cal.set(Calendar.MINUTE, timeFields[1]);
+        cal.set(Calendar.SECOND, timeFields[2]);
+        cal.set(Calendar.MILLISECOND, timeFields[3]);
+    }
+
+
+    /**
+     * Parse the fraction of a second into milliseconds, e.g. "5" is 500, "24" is 240 and "2421" is 242 milliseconds.
+     *
+     * @param fraction the fraction of the second (digits after the decimal point)
+     * @return the milliseconds
+     * @throws NumberFormatException In case of an invalid number
+     */
+    private int parseFractionOfSecond(String fraction) {
+        StringBuilder millis = new StringBuilder(fraction.trim());
+        if (millis.length() > 3) {
+            millis.setLength(3);
+        }
+
+        while (millis.length() < 3) {
+            millis.append('0');
+        }
+
+        return Integer.parseInt(millis.toString());
     }
 
     
@@ -213,10 +270,14 @@ public final class DateUtil {
      * Parse a date
      *
      * @param date the date to parse like: 10.02.2004, 10.2.04@11:22
-     * @return the date
+     * @return the date or null if the date is null or empty
      * @throws IllegalArgumentException In case of invalid dateformat
      */
     public Date parseDate(String date) {
+        if (date == null || date.trim().length() == 0) {
+            return null;
+        }
+
         if (date.indexOf('T') > 0) {
             return parseDate(date, "T");
         } else if (date.indexOf('@') > 0) {
@@ -240,21 +301,26 @@ public final class DateUtil {
             return null;
         }
 
+        // surrounding whitespace is ignored
+        final String trimmedDate = date.trim();
         Calendar cal = Calendar.getInstance();
+        cal.setLenient(false);
         int year = cal.get(Calendar.YEAR);
         int month = cal.get(Calendar.MONTH);
         int day = cal.get(Calendar.DAY_OF_MONTH);
 
-        String dayStr = date;
-        int idx = date.indexOf(timeSeparator);
+        String dayStr = trimmedDate;
+        int[] timeFields = new int[] {0, 0, 0, 0};
+        int idx = trimmedDate.indexOf(timeSeparator);
         if (idx > 0) {
-            dayStr = date.substring(0, idx);
+            dayStr = trimmedDate.substring(0, idx);
 
-            // parse time
-            cal.setTime(parseTime(date.substring(idx + 1)));
-        } else {
-            cal.setTime(parseTime("0:0"));
-            
+            // parse time: it is validated together with the parsed date (not with the current date)
+            String timeStr = trimmedDate.substring(idx + timeSeparator.length());
+            if (timeStr.trim().isEmpty()) {
+                throw new IllegalArgumentException("Invalid start time: " + date);
+            }
+            timeFields = parseTimeFields(timeStr);
         }
 
         char dateSep = '-';
@@ -263,9 +329,10 @@ public final class DateUtil {
         }
 
         if (dayStr.indexOf(dateSep) > 0) {
-            String[] split = dayStr.split("\\" + dateSep);
-            if (split == null || split.length <= 0 || split.length < 3) {
-                throw new IllegalArgumentException("Invalid start date!");
+            // the limit -1 keeps trailing empty parts, so that e.g. 01.02.2024. is rejected
+            String[] split = dayStr.split("\\" + dateSep, -1);
+            if (split == null || split.length != 3) {
+                throw new IllegalArgumentException("Invalid start date: " + dayStr);
             }
 
             try {
@@ -275,12 +342,18 @@ public final class DateUtil {
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("Invalid start date: " + dayStr);
             }
+        } else {
+            throw new IllegalArgumentException("Invalid start date (no date separator): " + dayStr);
         }
 
         if (day > 31) {
             int y = year;
             year = day;
             day = y;
+        }
+
+        if (year < 0) {
+            throw new IllegalArgumentException("Invalid start date: " + date);
         }
 
         if (year < 100) {
@@ -290,7 +363,13 @@ public final class DateUtil {
         cal.set(Calendar.YEAR, year);
         cal.set(Calendar.MONTH, month);
         cal.set(Calendar.DAY_OF_MONTH, day);
-        return cal.getTime();
+        setTimeFields(cal, timeFields);
+
+        try {
+            return cal.getTime();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid start date: " + date);
+        }
     }
 
 
@@ -311,7 +390,7 @@ public final class DateUtil {
      * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
      *
      * @param date the date object
-     * @param sep the separator
+     * @param sep the separator, null for the default separator @
      * @return date as string
      */
     public String toDateString(Date date, String sep) {
@@ -321,7 +400,7 @@ public final class DateUtil {
     
     /**
      * Converts a given date back into toolarium-date-notation and returns a well formed string of the following format:
-     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
+     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;. The instant is formatted in the system default time zone.
      *
      * @param instant the instant object
      * @return date as string
@@ -333,38 +412,45 @@ public final class DateUtil {
     
     /**
      * Converts a given date back into toolarium-date-notation and returns a well formed string of the following format:
-     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;
+     * &lt;dd.mm.yyyy@HH24:MI:SS&gt;. The instant is formatted in the system default time zone.
      *
      * @param instant the instant object
-     * @param sep the separator
+     * @param sep the separator, null for the default separator @
      * @return date as string
      */
     public String toDateString(Instant instant, String sep) {
-        return resolveFormatter(sep).format(instant);
+        return resolveFormatter(sep).format(instant.atZone(ZoneId.systemDefault()));
     }
 
 
     /**
      * Resolve the cached formatter for the given separator
      *
-     * @param sep the separator
+     * @param sep the separator, null for the default separator @
      * @return the formatter
      */
     private DateTimeFormatter resolveFormatter(String sep) {
-        if ("@".equals(sep)) {
+        if (sep == null || "@".equals(sep)) {
+            // null is the default separator
             return EUROPEAN_DATE_AT;
         } else if ("T".equals(sep)) {
             return EUROPEAN_DATE_T;
         } else if (" ".equals(sep)) {
             return EUROPEAN_DATE_SPACE;
         }
-        return DateTimeFormatter.ofPattern("dd.MM.yyyy" + sep + "HH:mm:ss");
+
+        // the separator is always added as literal text (letters are not interpreted as pattern symbols)
+        return new DateTimeFormatterBuilder()
+                .appendPattern("dd.MM.yyyy")
+                .appendLiteral(String.valueOf(sep))
+                .appendPattern("HH:mm:ss")
+                .toFormatter();
     }
 
 
     /**
-     * Converts a given date back into an iso standard:
-     * &lt;yyyy-mm-ddTHH24:MI:SS&gt;
+     * Converts a given date into the ISO-8601 instant format in UTC, e.g. 2016-02-15T11:44:23.242Z
+     * (see {@link java.time.format.DateTimeFormatter#ISO_INSTANT}). The fraction of a second is only added if it is not 0.
      *
      * @param date the date object
      * @return date as string

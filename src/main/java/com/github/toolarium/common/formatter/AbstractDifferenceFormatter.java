@@ -7,33 +7,35 @@ package com.github.toolarium.common.formatter;
 
 import com.github.toolarium.common.util.TextUtil;
 import java.text.DecimalFormat;
+import java.util.HashMap;
+import java.util.Map;
 
 
 /**
- * 
+ * Base class to format a difference value (e.g. a time or a size difference) into a human readable string.
+ * The formatting is thread-safe.
+ *
  * @author patrick
  */
 public abstract class AbstractDifferenceFormatter  {
-    /** The internal decimal formatter */
-    private final ThreadLocal<DecimalFormat> formatter;
-    
-    /** Defines if after a value follows a space */
-    private boolean spaceAfterValue = false;
+    /** The decimal formatters of the current thread by pattern, shared by all formatter instances (DecimalFormat is not thread-safe) */
+    private static final ThreadLocal<Map<String, DecimalFormat>> FORMATTER_CACHE = ThreadLocal.withInitial(HashMap::new);
 
-    
+    /** The format pattern */
+    private final String pattern;
+
+    /** Defines if after a value follows a space */
+    private final boolean spaceAfterValue;
+
+
     /**
      * Constructor
-     * 
+     *
      * @param pattern the format pattern
      * @param spaceAfterValue true to have a space after the value
      */
     public AbstractDifferenceFormatter(String pattern, boolean spaceAfterValue) {
-        formatter = ThreadLocal.withInitial(() -> {
-            DecimalFormat df = new DecimalFormat(pattern);
-            df.setMinimumFractionDigits(0);
-            df.setGroupingUsed(false);
-            return df;
-        });
+        this.pattern = pattern;
         this.spaceAfterValue = spaceAfterValue;
     }
     
@@ -106,10 +108,10 @@ public abstract class AbstractDifferenceFormatter  {
         }
 
         if (space) {
-            return formatter.get().format(number) + " " + t;
+            return formatter().format(number) + " " + t;
         }
 
-        return formatter.get().format(number) + t;
+        return formatter().format(number) + t;
     }
 
 
@@ -129,10 +131,10 @@ public abstract class AbstractDifferenceFormatter  {
         }
 
         if (space) {
-            return formatter.get().format(number) + " " + t;
+            return formatter().format(number) + " " + t;
         }
 
-        return formatter.get().format(number) + t;
+        return formatter().format(number) + t;
     }
     
     
@@ -161,12 +163,36 @@ public abstract class AbstractDifferenceFormatter  {
     
     
     /**
-     * Get the decimal formatter
+     * Get a copy of the decimal formatter, changes of the copy have no effect on the formatting of this formatter
      *
      * @return the decimal formatter
      */
     protected DecimalFormat getDecimalFormatter() {
-        return formatter.get();
+        return (DecimalFormat) formatter().clone();
+    }
+
+
+    /**
+     * Get the cached decimal formatter of the current thread for the pattern
+     *
+     * @return the decimal formatter, it must not be modified
+     */
+    private DecimalFormat formatter() {
+        return FORMATTER_CACHE.get().computeIfAbsent(pattern, AbstractDifferenceFormatter::createDecimalFormat);
+    }
+
+
+    /**
+     * Create a decimal formatter
+     *
+     * @param formatPattern the format pattern
+     * @return the decimal formatter
+     */
+    private static DecimalFormat createDecimalFormat(String formatPattern) {
+        DecimalFormat df = new DecimalFormat(formatPattern);
+        df.setMinimumFractionDigits(0);
+        df.setGroupingUsed(false);
+        return df;
     }
     
     

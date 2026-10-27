@@ -72,7 +72,7 @@ public class SemanticVersionNpmRangeTest {
 
             // Wildcard ranges:
             {V3_1_5, "", true }, {V3_1_5, "*", true },
-            {"0.0.0", "*", true }, {"1.0.0-beta", "*", true },
+            {"0.0.0", "*", true }, {"1.0.0-beta", "*", false }, {"1.0.0-beta", "", false }, {"1.0.0-beta", "x", false },
             {"3.1.5-beta", V3_1_X, false }, {"3.1.5-beta+exp.sha.5114f85", V3_1_X, false }, {"3.1.5+exp.sha.5114f85", V3_1_X, true },
             {V3_1_5, V3_1_X, true }, {V3_1_5, "3.1.X", true }, {V3_1_5, "3.x", true },
             {V3_1_5, "3.*", true }, {V3_1_5, "3.1", true }, {V3_1_5, "3", true },

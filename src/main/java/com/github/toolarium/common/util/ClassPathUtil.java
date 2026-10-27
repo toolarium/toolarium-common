@@ -6,21 +6,26 @@
 package com.github.toolarium.common.util;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.InvalidPathException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -36,12 +41,16 @@ import org.slf4j.LoggerFactory;
 public final class ClassPathUtil {
     private static final String JAVA_LANG = "java.lang";
     private static final String COLON_SPACE = ": ";
+    private static final String META_INF_SUFFIX = "/META-INF";
+    private static final String META_INF_VERSIONS = "META-INF/versions/";
+    private static final String CLASS_EXTENSION = ".class";
     private static final Logger LOG = LoggerFactory.getLogger(ClassPathUtil.class);
     private final char[] fileSeparators;
     private final Map<String, String> classPaths;
-    private final ClassList classes;
+    private final Object classesLock = new Object();
+    private volatile ClassList classes;
     private final RegularExpressionUtil regexUtil = new RegularExpressionUtil();
-    private Map<String, String> jarCache;
+    private final Map<String, String> jarCache;
     
 
     /**
@@ -60,8 +69,7 @@ public final class ClassPathUtil {
     private ClassPathUtil() {
         fileSeparators = new char[] {FileUtil.SLASH, FileUtil.BACKSLASH, (char) System.getProperty("file.separator").getBytes()[0]};
         classPaths = initClassPaths();
-        classes = initClassList();
-        jarCache = null;
+        jarCache = new ConcurrentHashMap<String, String>();
     }
 
     
@@ -76,28 +84,31 @@ public final class ClassPathUtil {
 
 
     /**
-     * Search an archive
+     * Search an archive by its file name. The file name of a class path entry has to match exactly (case-sensitive),
+     * e.g. {@code data.jar} does not match {@code mydata.jar}. The name may also contain trailing path elements
+     * (e.g. {@code lib/data.jar}).
      *
      * @param archiveName the archive to search
      * @return the full archive path ot null if it does not exist
      */
     public String searchArchiveByName(String archiveName) {
-        String result = null;
-        if (jarCache == null) {
-            jarCache = new HashMap<String, String>();
-        } else {
-            result = jarCache.get(archiveName);
+        if (archiveName == null) {
+            return null;
         }
         
+        String result = jarCache.get(archiveName);
         if (result != null) {
             return result;
         }
 
-        // search
+        // search: the file name (or the trailing path elements) of the entry has to match exactly
+        final String name = archiveName.replace(FileUtil.BACKSLASH, FileUtil.SLASH);
+        final String nameSuffix = FileUtil.SLASH_STR + name;
         Set<String> c = getClassPaths();
         for (Iterator<String> it = c.iterator(); it.hasNext();) {
             result = it.next();
-            if (result.indexOf(archiveName) > -1) {
+            final String entry = result.replace(FileUtil.BACKSLASH, FileUtil.SLASH);
+            if (entry.equals(name) || entry.endsWith(nameSuffix)) {
                 jarCache.put(archiveName, result);
                 return result;
             }
@@ -111,7 +122,7 @@ public final class ClassPathUtil {
      * Search archive by regular expression
      *
      * @param regExp the search regular expression
-     * @return a list with full qualified class names or null if it does not exist
+     * @return a list with the matching class path entries (archives and directories); an empty list if nothing matches or null if the expression is null or empty
      * @throws IllegalArgumentException if the regex pattern is invalid
      */
     public List<String> searchArchiveByRegExp(String regExp) {
@@ -140,7 +151,7 @@ public final class ClassPathUtil {
      *         exist
      */
     public List<String> searchClassByName(String className) {
-        return classes.getClasses(className);
+        return getClassList().getClasses(className);
     }
 
     
@@ -152,7 +163,7 @@ public final class ClassPathUtil {
      *         exist
      */
     public List<String> searchClassByRegExp(String regExp) {
-        return classes.searchClasses(regExp);
+        return getClassList().searchClasses(regExp);
     }
 
     
@@ -164,7 +175,7 @@ public final class ClassPathUtil {
      *         exist
      */
     public List<String> searchClassByPackageName(String packageName) {
-        return classes.getClassesFromPackage(packageName);
+        return getClassList().getClassesFromPackage(packageName);
     }
 
     
@@ -188,11 +199,10 @@ public final class ClassPathUtil {
      * Search file by regular expression
      *
      * @param regExp the search regular expression
-     * @return a list with full qualified class names or null if it does not
-     *         exist
+     * @return a sorted list with the matching file names (resources which are not classes); an empty list if nothing matches or null if the expression is null or empty
      */
     public List<String> searchFileByRegExp(String regExp) {
-        return classes.searchFiles(regExp);
+        return getClassList().searchFiles(regExp);
     }
 
     
@@ -200,27 +210,48 @@ public final class ClassPathUtil {
      * Search file by regular expression
      *
      * @param regExp the search regular expression
-     * @return a list with full qualified class names or null if it does not
-     *         exist
+     * @return a list with the URLs of the matching files sorted by URL (case insensitive); an empty list if nothing matches or null if the expression is null or empty
      */
     public List<URL> searchFileByRegExpAsURLList(String regExp) {
-        return classes.searchFilesAsURL(regExp);
+        return getClassList().searchFilesAsURL(regExp);
     }
 
     
     /**
      * Returns a list of all the class paths in the current VM.
      * 
-     * @return the class paths in current vm
+     * @return the class paths in current vm (read only)
      */
     public Set<String> getClassPaths() {
-        return classPaths.keySet();
+        return Collections.unmodifiableSet(classPaths.keySet());
     }
     
     
     /**
+     * Get the list of the classes and files in the class path. The class path is scanned on the first call,
+     * further calls return the same list.
+     *
+     * @return the class list
+     */
+    private ClassList getClassList() {
+        ClassList result = classes;
+        if (result == null) {
+            synchronized (classesLock) {
+                result = classes;
+                if (result == null) {
+                    result = initClassList();
+                    classes = result;
+                }
+            }
+        }
+
+        return result;
+    }
+
+
+    /**
      * Returns a list of all the class paths in the current VM.
-     * 
+     *
      * @return the class paths in current vm
      */
     private Map<String, String> initClassPaths() {
@@ -230,11 +261,13 @@ public final class ClassPathUtil {
         addSystemPropertyToClassPaths(classPaths, "sun.boot.class.path", pathSeparator);
         addSystemPropertyToClassPaths(classPaths, "java.class.path", pathSeparator);
         addSystemPropertyToClassPaths(classPaths, "java.ext.dirs", pathSeparator);
-        addSystemEnvironmentToClassPaths(classPaths, "CLASSPATH", pathSeparator);
+        // the CLASSPATH environment variable is not read: the jvm already uses it for java.class.path if it is relevant
         //addSystemPropertyToClassPaths( "java.library.path", pathSeparator );
 
-        ClassLoader cl = Thread.currentThread().getContextClassLoader().getClass().getClassLoader();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
+            cl = ClassPathUtil.class.getClassLoader();
+
             /*
             if( classes.getClassesFromPackage( JAVA_LANG ) == null )
             {
@@ -258,7 +291,13 @@ public final class ClassPathUtil {
             } 
             */
         }
-        
+
+        // normalized form of the already known entries, to avoid adding the same path in another notation
+        Set<String> normalizedClassPaths = new HashSet<String>();
+        for (String s : classPaths.keySet()) {
+            normalizedClassPaths.add(normalizeClassPathEntry(s));
+        }
+
         while (cl != null) {
             if (URLClassLoader.class.isAssignableFrom(cl.getClass())) {
                 if (LOG.isDebugEnabled()) {
@@ -267,10 +306,7 @@ public final class ClassPathUtil {
 
                 try {
                     for (URL url : ((URLClassLoader) cl).getURLs()) {
-                        String s = FileUtil.getInstance().extractURLPath(url);
-                        if (s != null && !classPaths.containsKey(s)) {
-                            classPaths.put(s, s);
-                        }
+                        addClassLoaderEntryToClassPaths(classPaths, normalizedClassPaths, url);
                     }
                 } catch (Exception e) {
                     if (LOG.isDebugEnabled()) {
@@ -287,10 +323,7 @@ public final class ClassPathUtil {
                     Enumeration<URL> e = cl.getResources("META-INF");
                     if (e != null) {
                         for (URL url : Collections.list(e)) {
-                            String s = FileUtil.getInstance().extractURLPath(url);
-                            if (s != null && !classPaths.containsKey(s)) {
-                                classPaths.put(s, s);
-                            }
+                            addClassLoaderEntryToClassPaths(classPaths, normalizedClassPaths, url);
                         }
 
                         cl = null;
@@ -309,6 +342,69 @@ public final class ClassPathUtil {
         }
 
         return classPaths;
+    }
+
+
+    /**
+     * Add a class path entry which was resolved by a class loader. Only file and jar urls are considered and
+     * entries which are already known (in any notation) are ignored.
+     *
+     * @param classPaths the class paths
+     * @param normalizedClassPaths the normalized form of the class paths
+     * @param url the url of the class path entry or of a META-INF resource
+     */
+    private void addClassLoaderEntryToClassPaths(Map<String, String> classPaths, Set<String> normalizedClassPaths, URL url) {
+        if (url == null || url.getProtocol() == null) {
+            return;
+        }
+
+        String protocol = url.getProtocol();
+        if (!"file".equalsIgnoreCase(protocol) && !"jar".equalsIgnoreCase(protocol)) {
+            return;
+        }
+
+        String s = FileUtil.getInstance().extractURLPath(url);
+        if (s == null || s.isEmpty()) {
+            return;
+        }
+
+        // a META-INF resource of a directory: use the directory itself
+        s = StringUtil.getInstance().trimRight(s, FileUtil.SLASH);
+        if (s.endsWith(META_INF_SUFFIX)) {
+            s = s.substring(0, s.length() - META_INF_SUFFIX.length());
+        }
+
+        if (s.isEmpty() || classPaths.containsKey(s)) {
+            return;
+        }
+
+        String normalized = normalizeClassPathEntry(s);
+        if (normalizedClassPaths.add(normalized)) {
+            classPaths.put(s, s);
+        }
+    }
+
+
+    /**
+     * Normalize a class path entry so that different notations of the same path can be compared.
+     *
+     * @param path the path
+     * @return the normalized path
+     */
+    private String normalizeClassPathEntry(String path) {
+        String result = path;
+        try {
+            result = new File(path).toPath().toAbsolutePath().normalize().toString();
+        } catch (InvalidPathException | SecurityException e) {
+            // keep path as it is (e.g. invalid path)
+        }
+
+        if (File.separatorChar == FileUtil.BACKSLASH) {
+            // windows file system is case insensitive
+            result = result.toLowerCase(Locale.ROOT);
+        }
+
+        return result;
     }
 
 
@@ -370,6 +466,7 @@ public final class ClassPathUtil {
         }
     }
 
+
     /**
      * Add all classes in the file system if it is a class
      *
@@ -378,11 +475,29 @@ public final class ClassPathUtil {
      * @param c the classes
      */
     private void addClassesInFileSystem(File file, String basePath, ClassList c) {
+        addClassesInFileSystem(file, basePath, c, new HashSet<String>());
+    }
+
+
+    /**
+     * Add all classes in the file system if it is a class. Every directory is only visited once, which prevents
+     * endless recursion in case of symbolic link cycles.
+     *
+     * @param file the files
+     * @param basePath the base path
+     * @param c the classes
+     * @param visitedDirectories the canonical paths of the already visited directories
+     */
+    private void addClassesInFileSystem(File file, String basePath, ClassList c, Set<String> visitedDirectories) {
         if (file.isDirectory()) {
+            if (!visitedDirectories.add(toCanonicalPath(file))) {
+                return; // already visited (symbolic link cycle)
+            }
+
             File[] files = file.listFiles();
             if (files != null) {
                 for (int i = 0; i < files.length; i++) {
-                    addClassesInFileSystem(files[i], basePath, c);
+                    addClassesInFileSystem(files[i], basePath, c, visitedDirectories);
                 }
             }
         } else {
@@ -397,6 +512,21 @@ public final class ClassPathUtil {
             }
 
             addIfClass(url, name, c, null);
+        }
+    }
+
+
+    /**
+     * Get the canonical path of a file, the absolute path in case it can not be resolved
+     *
+     * @param file the file
+     * @return the canonical path
+     */
+    private String toCanonicalPath(File file) {
+        try {
+            return file.getCanonicalPath();
+        } catch (IOException | SecurityException e) {
+            return file.getAbsolutePath();
         }
     }
 
@@ -415,13 +545,15 @@ public final class ClassPathUtil {
             zip = new ZipFile(archive);
             Enumeration<? extends ZipEntry> e = zip.entries();
 
+            // the archive uri is the same for all entries, resolve it only once (toURI accesses the file system)
+            String archiveUrlPrefix = archive.toURI().toASCIIString() + "!/";
             while (e.hasMoreElements()) {
                 ZipEntry zipE = e.nextElement();
 
                 // TODO:
                 // load jar archive.toURI().toASCIIString() and get module-info -> modulename
                 // url = new URL( "jrt", "", moduleName + "/" + zipE.getName() );
-                String urlPath = archive.toURI().toASCIIString() + "!/" + zipE.getName();
+                String urlPath = archiveUrlPrefix + zipE.getName();
 
                 URL url = null;
                 try {
@@ -488,12 +620,17 @@ public final class ClassPathUtil {
             entry = entry.substring(prefixFilter.length());
         }
 
-        int length = entry.length();
-        int minusSix = length - 6;
         entry = entry.replace('\\', '/');
-        
-        if ((minusSix > 0) && (entry.indexOf(".class") == minusSix)) {
-            entry = entry.substring(0, minusSix);
+        if (entry.endsWith(CLASS_EXTENSION) && entry.length() > CLASS_EXTENSION.length()) {
+            // classes of a multi-release jar (META-INF/versions/<n>/...) are registered with their real name
+            if (entry.startsWith(META_INF_VERSIONS)) {
+                int idx = entry.indexOf('/', META_INF_VERSIONS.length());
+                if (idx > 0) {
+                    entry = entry.substring(idx + 1);
+                }
+            }
+
+            entry = entry.substring(0, entry.length() - CLASS_EXTENSION.length());
             for (int i = 0; i < fileSeparators.length; i++) {
                 entry = entry.replace(fileSeparators[i], '.');
             }
@@ -528,33 +665,9 @@ public final class ClassPathUtil {
         }
     }
 
-    
     /**
-     * Add path elements
-     * 
-     * @param classPaths the class paths
-     * @param envKey the environment key
-     * @param pathSeparator the path separator
-     */
-    private void addSystemEnvironmentToClassPaths(Map<String, String> classPaths, String envKey, String pathSeparator) {
-        String path = System.getenv(envKey);
-        if (path == null) {
-            return;
-        }
-
-        StringTokenizer toker = new StringTokenizer(path, pathSeparator);
-        while (toker.hasMoreElements()) {
-            String s = toker.nextToken();
-
-            if (!classPaths.containsKey(s)) {
-                classPaths.put(s, s);
-            }
-        }
-    }
-
-    
-    /**
-     * This class holds the class names
+     * Index of the resolved class path: it holds all class names (by simple name and by package name) and all other
+     * files with their URLs. It is filled once when the class path is scanned and is read only afterwards.
      */
     public final class ClassList {
         private Map<String, List<String>> classNameMap;
@@ -601,9 +714,9 @@ public final class ClassPathUtil {
             // store package name access
             if (packageNameMap.containsKey(packageName)) {
                 List<String> l = packageNameMap.get(packageName);
-                if (!l.contains(name)) {
-                    l.add(name);
-                    Collections.sort(l);
+                int pos = Collections.binarySearch(l, name); // the list is kept sorted
+                if (pos < 0) {
+                    l.add(-pos - 1, name);
                 }
             } else {
                 List<String> l = new ArrayList<String>();
@@ -657,7 +770,7 @@ public final class ClassPathUtil {
          * Gets a list of class names back
          *
          * @param name the name of the class with or without package name
-         * @return a list with full qualified class names
+         * @return a list (copy) with full qualified class names or null if it does not exist
          */
         public List<String> getClasses(String name) {
             if (name == null || name.trim().length() == 0) {
@@ -671,8 +784,8 @@ public final class ClassPathUtil {
                 ref = ref.substring(0, ref.length() - ".java".length());
             }
             
-            if (ref.endsWith(".class")) {
-                ref = ref.substring(0, ref.length() - ".class".length());
+            if (ref.endsWith(CLASS_EXTENSION)) {
+                ref = ref.substring(0, ref.length() - CLASS_EXTENSION.length());
             }
             
             ref = ref.replace(FileUtil.SLASH, '.');
@@ -693,7 +806,7 @@ public final class ClassPathUtil {
                 }
             }
 
-            return classNameMap.get(name);
+            return copyList(classNameMap.get(ref));
         }
 
         
@@ -789,25 +902,40 @@ public final class ClassPathUtil {
          * Gets a list of class names back
          *
          * @param packageName the name of the package
-         * @return a list with full qualified class names
+         * @return a list (copy) with full qualified class names or null if it does not exist
          */
         public List<String> getClassesFromPackage(String packageName) {
             if (packageName == null || packageName.trim().length() == 0) {
                 return null;
             }
 
-            return packageNameMap.get(StringUtil.getInstance().trimRight(packageName, '.'));
+            return copyList(packageNameMap.get(StringUtil.getInstance().trimRight(packageName, '.')));
         }
 
         
         /**
          * Gets an iterator to go through the class names
          *
-         * @return the iterator
+         * @return the iterator (read only)
          */
         public Iterator<String> iterator() {
-            return list.iterator();
+            return Collections.unmodifiableSet(list).iterator();
         }        
+
+        
+        /**
+         * Create a copy of the given list, so the internal state can not be modified by the caller.
+         *
+         * @param input the list to copy
+         * @return the copy or null if the input is null
+         */
+        private List<String> copyList(List<String> input) {
+            if (input == null) {
+                return null;
+            }
+            
+            return new ArrayList<String>(input);
+        }
 
         
         /**

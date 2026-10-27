@@ -36,7 +36,7 @@ tasks.withType(JavaCompile) {
 /****************************************************************************************
  * Integration test with toolarium-java-agent
  ****************************************************************************************/
-def agentJar = file("${rootDir}/../toolarium-java-agent/build/libs/toolarium-java-agent-1.0.0-SNAPSHOT.jar")
+def agentJar = file("${rootDir}/lib-test/toolarium-java-agent-1.0.0.jar")
 
 sourceSets {
     integrationTest {

@@ -11,14 +11,16 @@ import java.util.SortedMap;
 
 
 /**
- * Implements he {@link ISortedMapDifference}.
- * 
+ * Implements the {@link ISortedMapDifference}.
+ *
+ * @param <K> the key type
+ * @param <V> the value type
  * @author patrick
  */
 public class SortedMapDifference<K, V> extends MapDifference<K, V> implements ISortedMapDifference<K, V> {
     
     /**
-_    * Constructor for SortedMapDifferenceImpl
+     * Constructor for SortedMapDifference
      *
      * @param onlyOnLeft only on left side
      * @param onlyOnRight only on right side
@@ -30,24 +32,36 @@ _    * Constructor for SortedMapDifferenceImpl
     }
 
     
+    /**
+     * @see com.github.toolarium.common.compare.map.impl.MapDifference#entriesDiffering()
+     */
     @Override
     public SortedMap<K, IValueDifference<V>> entriesDiffering() {
         return (SortedMap<K, IValueDifference<V>>) super.entriesDiffering();
     }
 
     
+    /**
+     * @see com.github.toolarium.common.compare.map.impl.MapDifference#entriesInCommon()
+     */
     @Override
     public SortedMap<K, V> entriesInCommon() {
         return (SortedMap<K, V>) super.entriesInCommon();
     }
 
     
+    /**
+     * @see com.github.toolarium.common.compare.map.impl.MapDifference#entriesOnlyOnLeft()
+     */
     @Override
     public SortedMap<K, V> entriesOnlyOnLeft() {
         return (SortedMap<K, V>) super.entriesOnlyOnLeft();
     }
 
     
+    /**
+     * @see com.github.toolarium.common.compare.map.impl.MapDifference#entriesOnlyOnRight()
+     */
     @Override
     public SortedMap<K, V> entriesOnlyOnRight() {
         return (SortedMap<K, V>) super.entriesOnlyOnRight();

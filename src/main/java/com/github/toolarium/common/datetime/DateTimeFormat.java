@@ -48,61 +48,36 @@ public final class DateTimeFormat {
     public static final String OLD_COOKIE_PATTERN = "EEE, dd-MMM-yyyy HH:mm:ss z";
 
 
-    private static final ThreadLocal<DateFormat> RFC_1123_FORMAT_TL = ThreadLocal.withInitial(() -> {
-        SimpleDateFormat sdf = new SimpleDateFormat(RFC1123_PATTERN, LOCALE_US);
-        sdf.setTimeZone(GMT_ZONE);
-        return sdf;
-    });
-
-    private static final ThreadLocal<DateFormat> OLD_COOKIE_FORMAT_TL = ThreadLocal.withInitial(() -> {
-        SimpleDateFormat sdf = new SimpleDateFormat(OLD_COOKIE_PATTERN, LOCALE_US);
-        sdf.setTimeZone(GMT_ZONE);
-        return sdf;
-    });
-
-    private static final ThreadLocal<DateFormat> RFC_1036_FORMAT_TL = ThreadLocal.withInitial(() -> {
-        SimpleDateFormat sdf = new SimpleDateFormat("EEEEEEEEE, dd-MMM-yy HH:mm:ss z", LOCALE_US);
-        sdf.setTimeZone(GMT_ZONE);
-        return sdf;
-    });
-
-    private static final ThreadLocal<DateFormat> ASCTIME_FORMAT_TL = ThreadLocal.withInitial(() -> {
-        SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM d HH:mm:ss yyyy", LOCALE_US);
-        sdf.setTimeZone(GMT_ZONE);
-        return sdf;
-    });
+    private static final String RFC_1036_PATTERN = "EEEEEEEEE, dd-MMM-yy HH:mm:ss z";
+    private static final String ASCTIME_PATTERN = "EEE MMM d HH:mm:ss yyyy";
+    private static final ThreadLocal<DateFormat> RFC_1123_FORMAT_TL = ThreadLocal.withInitial(() -> createFormat(RFC1123_PATTERN));
+    private static final ThreadLocal<DateFormat> OLD_COOKIE_FORMAT_TL = ThreadLocal.withInitial(() -> createFormat(OLD_COOKIE_PATTERN));
+    private static final ThreadLocal<DateFormat> RFC_1036_FORMAT_TL = ThreadLocal.withInitial(() -> createFormat(RFC_1036_PATTERN));
+    private static final ThreadLocal<DateFormat> ASCTIME_FORMAT_TL = ThreadLocal.withInitial(() -> createFormat(ASCTIME_PATTERN));
 
 
     /**
      * DateFormat to be used to format dates.
-     * @deprecated Use {@link #getRfc1123Format()} instead — this static instance is not thread-safe.
+     * @deprecated Use {@link #getRfc1123Format()} instead. This shared static instance is not thread-safe.
      */
     @Deprecated
-    public static final DateFormat RFC_1123_FORMAT = RFC_1123_FORMAT_TL.get();
-
-
-    /**
-     * DateFormat to be used to format old netscape cookies.
-     * @deprecated Use {@link #getOldCookieFormat()} instead — this static instance is not thread-safe.
-     */
-    @Deprecated
-    public static final DateFormat oldCookieFormat = OLD_COOKIE_FORMAT_TL.get();
+    public static final DateFormat RFC_1123_FORMAT = createFormat(RFC1123_PATTERN);
 
 
     /**
      * Format for RFC 1036 date string -- "Sunday, 06-Nov-94 08:49:37 GMT".
-     * @deprecated Use {@link #getRfc1036Format()} instead — this static instance is not thread-safe.
+     * @deprecated Use {@link #getRfc1036Format()} instead. This shared static instance is not thread-safe.
      */
     @Deprecated
-    public static final DateFormat RFC_1036_FORMAT = RFC_1036_FORMAT_TL.get();
+    public static final DateFormat RFC_1036_FORMAT = createFormat(RFC_1036_PATTERN);
 
 
     /**
      * Format for C asctime() date string -- "Sun Nov  6 08:49:37 1994".
-     * @deprecated Use {@link #getAsctimeFormat()} instead — this static instance is not thread-safe.
+     * @deprecated Use {@link #getAsctimeFormat()} instead. This shared static instance is not thread-safe.
      */
     @Deprecated
-    public static final DateFormat ASCTIME_FORMAT = ASCTIME_FORMAT_TL.get();
+    public static final DateFormat ASCTIME_FORMAT = createFormat(ASCTIME_PATTERN);
 
 
     /**
@@ -114,41 +89,56 @@ public final class DateTimeFormat {
 
 
     /**
-     * Returns a thread-safe RFC 1123 DateFormat instance.
+     * Returns a new thread-safe RFC 1123 DateFormat instance.
      *
      * @return the DateFormat for RFC 1123
      */
     public static DateFormat getRfc1123Format() {
-        return RFC_1123_FORMAT_TL.get();
+        return (DateFormat) RFC_1123_FORMAT_TL.get().clone();
     }
 
 
     /**
-     * Returns a thread-safe old cookie DateFormat instance.
+     * Returns a new thread-safe old cookie DateFormat instance.
      *
      * @return the DateFormat for old cookies
      */
     public static DateFormat getOldCookieFormat() {
-        return OLD_COOKIE_FORMAT_TL.get();
+        return (DateFormat) OLD_COOKIE_FORMAT_TL.get().clone();
     }
 
 
     /**
-     * Returns a thread-safe RFC 1036 DateFormat instance.
+     * Returns a new thread-safe RFC 1036 DateFormat instance.
      *
      * @return the DateFormat for RFC 1036
      */
     public static DateFormat getRfc1036Format() {
-        return RFC_1036_FORMAT_TL.get();
+        return (DateFormat) RFC_1036_FORMAT_TL.get().clone();
     }
 
 
     /**
-     * Returns a thread-safe asctime DateFormat instance.
+     * Returns a new thread-safe asctime DateFormat instance.
      *
      * @return the DateFormat for asctime
      */
     public static DateFormat getAsctimeFormat() {
-        return ASCTIME_FORMAT_TL.get();
+        return (DateFormat) ASCTIME_FORMAT_TL.get().clone();
+    }
+
+
+    /**
+     * Creates a new date format with the US locale and the GMT time zone. The format is not lenient:
+     * out of range values like 32 Jan or 25:61 are rejected by parse.
+     *
+     * @param pattern the pattern
+     * @return the new date format instance
+     */
+    private static DateFormat createFormat(String pattern) {
+        SimpleDateFormat sdf = new SimpleDateFormat(pattern, LOCALE_US);
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT")); // own instance, the public GMT_ZONE is mutable
+        sdf.setLenient(false);
+        return sdf;
     }
 }

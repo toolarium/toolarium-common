@@ -43,22 +43,6 @@ public interface IBandwidthThrottling {
 
     
     /**
-     * Gets the update interval
-     *
-     * @return Returns the update interval.
-     */
-    int getUpdateInterval();
-
-    
-    /**
-     * Sets the update interval
-     *
-     * @param updateInterval The update interval to set.
-     */
-    void setUpdateInterval(int updateInterval);
-
-    
-    /**
      * Gets the counter
      *
      * @return Returns the counter.

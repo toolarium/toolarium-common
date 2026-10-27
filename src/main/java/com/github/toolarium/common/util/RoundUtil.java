@@ -5,6 +5,9 @@
  */
 package com.github.toolarium.common.util;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 
 /**
  * Round util class.
@@ -13,6 +16,8 @@ package com.github.toolarium.common.util;
  */
 public final class RoundUtil {
     private static final double[] POWERS_OF_TEN = new double[16];
+    /** Above this magnitude every double is an integer, rounding cannot change the value anymore (2^52). */
+    private static final double MAX_FRACTION_MAGNITUDE = 4503599627370496.0;
 
     static {
         for (int i = 0; i < POWERS_OF_TEN.length; i++) {
@@ -48,15 +53,34 @@ public final class RoundUtil {
 
 
     /**
-     * Round double values
+     * Round double values (half up, away from zero, see {@link RoundingMode#HALF_UP}). The value is rounded based on its
+     * decimal representation (see {@link BigDecimal#valueOf(double)}), e.g. 1.005 rounded to 2 fraction digits is 1.01.
+     * NaN and infinite values are returned unchanged.
+     * In case the value is too large to have any fraction at the given scale, it is returned unchanged as well
+     * (no saturation at {@link Long#MAX_VALUE}).
      *
      * @param val   the value to round
-     * @param scale the next
+     * @param scale the number of fraction digits
      * @return the rounded value
      */
     public double round(double val, int scale) {
+        if (Double.isNaN(val) || Double.isInfinite(val)) {
+            return val;
+        }
+
         double s = powerOfTen(scale);
-        return Math.round(val * s) / s;
+        if (s == 0.0) {
+            // very large negative scale: 10^scale underflows, every finite value rounds to zero
+            return 0.0;
+        }
+
+        double scaled = val * s;
+        if (Double.isNaN(scaled) || Double.isInfinite(scaled) || Math.abs(scaled) >= MAX_FRACTION_MAGNITUDE) {
+            return val;
+        }
+
+        // round the decimal representation, the binary value of e.g. 1.005 is slightly below 1.005
+        return BigDecimal.valueOf(val).setScale(scale, RoundingMode.HALF_UP).doubleValue();
     }
 
 

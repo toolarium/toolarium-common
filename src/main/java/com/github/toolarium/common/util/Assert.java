@@ -5,8 +5,10 @@
  */
 package com.github.toolarium.common.util;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.util.Collection;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -29,6 +31,30 @@ public final class Assert {
      */
     private Assert() {
         // NOP
+    }
+
+
+    /**
+     * Set the log level which is used to log a failed assertion. The default is {@link Level#DEBUG}.
+     *
+     * @param logLevel the log level; null resets it to the default {@link Level#DEBUG}
+     */
+    public static void setLogLevel(Level logLevel) {
+        if (logLevel == null) {
+            level = Level.DEBUG;
+        } else {
+            level = logLevel;
+        }
+    }
+
+
+    /**
+     * Define if the stack trace of the exception is logged in case of a failed assertion. The default is false.
+     *
+     * @param logStackTraceOfException true to log the stack trace
+     */
+    public static void setLogStackTrace(boolean logStackTraceOfException) {
+        logStackTrace = logStackTraceOfException;
     }
 
     
@@ -159,7 +185,7 @@ public final class Assert {
 
     
     /**
-     * Assert that the input must not be null or empty, throw an exception otherwise.
+     * Assert that the input is null or empty, throw an exception otherwise.
      * 
      * @param <T> the generic exception type
      * @param object the object to validate
@@ -173,7 +199,7 @@ public final class Assert {
    
     
     /**
-     * Assert that the input must not be null or empty, throw an exception otherwise.
+     * Assert that the input is null or empty, throw an exception otherwise.
      * 
      * @param <T> the generic exception type
      * @param object the object to validate
@@ -187,10 +213,8 @@ public final class Assert {
             return;
         }
         
-        if (object instanceof Collection) {
-            isTrue((((Collection<?>) object).size() == 0), exceptionClass, exceptionMessage, logMessage);
-        } else if (object instanceof String) {
-            isTrue((((String) object).trim().length() == 0), exceptionClass, exceptionMessage, logMessage);
+        if (isEmptyCheckSupported(object)) {
+            isTrue(isEmptyValue(object), exceptionClass, exceptionMessage, logMessage);
         }
     }
 
@@ -222,12 +246,42 @@ public final class Assert {
     public static <T extends Exception> void isNotEmpty(Object object, Class<T> exceptionClass, String exceptionMessage, String logMessage) throws T {
         isNotNull(object, exceptionClass, exceptionMessage, logMessage);
 
-        if (object instanceof Collection) {
-            isFalse((((Collection<?>) object).size() == 0), exceptionClass, exceptionMessage, logMessage);
-        } else if (object instanceof String) {
-            isFalse((((String) object).trim().length() == 0), exceptionClass, exceptionMessage, logMessage);
+        if (isEmptyCheckSupported(object)) {
+            isFalse(isEmptyValue(object), exceptionClass, exceptionMessage, logMessage);
         }
     }    
+
+    
+    /**
+     * Check if the empty check is supported for the given object: {@link Collection}, {@link Map}, arrays and {@link CharSequence}.
+     *
+     * @param object the object to check
+     * @return true if the empty check is supported
+     */
+    private static boolean isEmptyCheckSupported(Object object) {
+        return object instanceof Collection || object instanceof Map || object instanceof CharSequence || (object != null && object.getClass().isArray());
+    }
+
+    
+    /**
+     * Check if the given object is empty. A char sequence which contains only whitespaces is considered as empty.
+     *
+     * @param object the object to check, see {@link #isEmptyCheckSupported(Object)}
+     * @return true if the object is empty
+     */
+    private static boolean isEmptyValue(Object object) {
+        if (object instanceof Collection) {
+            return ((Collection<?>) object).isEmpty();
+        } else if (object instanceof Map) {
+            return ((Map<?, ?>) object).isEmpty();
+        } else if (object instanceof CharSequence) {
+            return object.toString().trim().isEmpty();
+        } else if (object != null && object.getClass().isArray()) {
+            return Array.getLength(object) == 0;
+        }
+        
+        return false;
+    }
 
     
     /**
@@ -506,11 +560,12 @@ public final class Assert {
      */
     public static <T extends Exception> void isEqual(Object object1, Object object2, Class<T> exceptionClass, String exceptionMessage, String logMessage) throws T {
         if (object1 == null) {
+            // both null is equal
             isNull(object2, exceptionClass, exceptionMessage, logMessage);
-        } else {
-            isNotNull(object2, exceptionClass, exceptionMessage, logMessage);
+            return;
         }
-        
+
+        isNotNull(object2, exceptionClass, exceptionMessage, logMessage);
         isTrue(object1.equals(object2), exceptionClass, exceptionMessage, logMessage);
     }
     
@@ -828,7 +883,7 @@ public final class Assert {
                 LOG.debug("Error occurred: " + e.getMessage(), e);
             }
             LOG.warn("Error occurred: " + e.getMessage());
-            throw new RuntimeException(exceptionMessage);
+            throw new RuntimeException(exceptionMessage, e);
         }
 
         if (exception == null) {
@@ -839,30 +894,56 @@ public final class Assert {
                     LOG.debug("Error occurred: " + e.getMessage(), e);
                 }
                 LOG.warn("Error occurred: " + e.getMessage());
-                throw new RuntimeException(exceptionMessage);
+                throw new RuntimeException(exceptionMessage, e);
             }
         }
         
-        java.lang.StackTraceElement[] orgStackTraceElements = exception.getStackTrace();
-        if (orgStackTraceElements != null && orgStackTraceElements.length > 2) {
-            int shift = 0;
-            for (int i = 0; i < orgStackTraceElements.length; i++) {
-                if (Assert.class.getName().equals(orgStackTraceElements[i].getClassName()) && "newInstance".equals(orgStackTraceElements[i].getMethodName())) {
-                    shift = i + 2;
-                    break;
-                }
-            }
-            
-            if (shift > 0) {
-                java.lang.StackTraceElement[] newStackTraceElements = new java.lang.StackTraceElement[orgStackTraceElements.length - shift];
-                for (int i = 0; i < orgStackTraceElements.length - shift; i++) {
-                    newStackTraceElements[i] = orgStackTraceElements[i + shift];
-                }
-                
-                exception.setStackTrace(newStackTraceElements);
-            }
-        }
-        
+        removeInternalStackTraceElements(exception);
         return exception;
+    }
+
+
+    /**
+     * Removes the leading stack trace elements of the exception construction (reflection, class instance utility)
+     * and of this class, so that the stack trace of the exception starts at the caller of the assertion.
+     *
+     * @param exception the exception
+     */
+    private static void removeInternalStackTraceElements(Exception exception) {
+        StackTraceElement[] elements = exception.getStackTrace();
+        if (elements == null || elements.length == 0) {
+            return;
+        }
+
+        // find the first element of this class
+        int index = 0;
+        while (index < elements.length && !isAssertStackTraceElement(elements[index])) {
+            index++;
+        }
+
+        if (index >= elements.length) {
+            return; // no element of this class found: keep the stack trace as it is
+        }
+
+        // skip all following elements of this class
+        while (index < elements.length && isAssertStackTraceElement(elements[index])) {
+            index++;
+        }
+
+        StackTraceElement[] newElements = new StackTraceElement[elements.length - index];
+        System.arraycopy(elements, index, newElements, 0, newElements.length);
+        exception.setStackTrace(newElements);
+    }
+
+
+    /**
+     * Checks if a stack trace element belongs to this class (or an inner class of it).
+     *
+     * @param element the stack trace element
+     * @return true if it belongs to this class
+     */
+    private static boolean isAssertStackTraceElement(StackTraceElement element) {
+        final String className = element.getClassName();
+        return Assert.class.getName().equals(className) || className.startsWith(Assert.class.getName() + "$");
     }
 }

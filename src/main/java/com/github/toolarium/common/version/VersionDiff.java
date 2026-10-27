@@ -11,10 +11,21 @@ package com.github.toolarium.common.version;
  * @author patrick
  */
 public enum VersionDiff {
+    /** The versions are equal. */
     NONE,
-    MAJOR, 
-    MINOR, 
-    PATCH, 
-    SUFFIX, 
+
+    /** The major part differs. */
+    MAJOR,
+
+    /** The minor part differs. */
+    MINOR,
+
+    /** The patch part differs. */
+    PATCH,
+
+    /** The suffix (pre-release) differs. */
+    SUFFIX,
+
+    /** The build differs. */
     BUILD;
 }

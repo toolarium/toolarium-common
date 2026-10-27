@@ -11,6 +11,8 @@ import java.util.Map;
 /**
  * An object representing the differences between two maps.
  *
+ * @param <K> the key type
+ * @param <V> the value type
  * @author patrick
  */
 public interface IMapDifference<K, V> {

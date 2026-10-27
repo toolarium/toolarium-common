@@ -1,12 +1,14 @@
 /*
- * TextUtil.java
+ * TextUtilTest.java
  *
  * Copyright by toolarium, all rights reserved.
  */
 package com.github.toolarium.common.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -118,7 +120,62 @@ public class TextUtilTest {
                      + "            CVE-2022-26336, CVE-2014-9527, CVE-2014-3529, CVE-2014-3574             ", 
                      TextUtil.getInstance().blockText(" - ", "CVE", 9, cveList, 72));
     }
+
+
+    /**
+     * Test block text with multiple, leading and non space whitespaces
+     */
+    @Test
+    public void testBlockTextWhitespaces() {
+        assertEquals(THIS_IS_MY_TEXT + SPACES5, TextUtil.getInstance().blockText(null, null, -1, "this  is   my text", 20));
+        assertEquals(THIS_IS_MY_TEXT + SPACES5, TextUtil.getInstance().blockText(null, null, -1, " this is my text", 20));
+        assertEquals(THIS_IS_MY_TEXT + SPACES5, TextUtil.getInstance().blockText(null, null, -1, "this\nis\tmy\r\ntext", 20));
+        assertEquals("title:this \n"
+                    + "      is  \n"
+                    + "      my  \n"
+                    + "      text", TextUtil.getInstance().blockText(null, TITLE, 6, "  this \n is\t\tmy  text", 4));
+    }
     
+
+    /**
+     * Test that text which exactly fits the max length is not wrapped (L45)
+     */
+    @Test
+    public void testBlockTextExactFit() {
+        assertEquals(THIS_IS_MY_TEXT, TextUtil.getInstance().blockText(null, null, -1, THIS_IS_MY_TEXT, THIS_IS_MY_TEXT.length()));
+    }
+
+
+    /**
+     * Test that the title of the caller is not modified
+     */
+    @Test
+    public void testBlockTextTitleUnchanged() {
+        StringBuilder title = new StringBuilder("ab");
+        assertEquals("ab  my", TextUtil.getInstance().blockText(new StringBuilder(), title, 4, new StringBuilder("my"), 2).toString());
+        assertEquals("ab", title.toString());
+    }
+
+
+    /**
+     * Test that a very long word is split in linear time
+     */
+    @Test
+    public void testBlockTextLongWordPerformance() {
+        final int wordLength = 1_000_000;
+        final int maxLen = 80;
+        final String word = StringUtil.getInstance().newString("x", wordLength);
+        String result = assertTimeout(Duration.ofSeconds(5), () -> TextUtil.getInstance().blockText(SPACES5, word, maxLen));
+
+        String[] lines = result.split(TextUtil.NL);
+        assertEquals(wordLength / maxLen, lines.length);
+        assertEquals(SPACES5.length() + maxLen, lines[0].length());
+        assertEquals(SPACES5.length() + maxLen, lines[lines.length - 1].length());
+        assertEquals(word, result.replace(TextUtil.NL, "").replace(TextUtil.SPACE, ""));
+        assertEquals("abcd" + TextUtil.NL + "efgh" + TextUtil.NL + "ij  ", TextUtil.getInstance().blockText("abcdefghij", 4));
+    }
+
+
     /**
      * Test string tokenizer
      */

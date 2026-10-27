@@ -18,7 +18,7 @@ public final class PropertyExpanderContextBasedProperties {
 
 
     /**
-     * Constructor for LogInformationHolder
+     * Constructor for PropertyExpanderContextBasedProperties
      */
     private PropertyExpanderContextBasedProperties() {
     }
@@ -56,16 +56,23 @@ public final class PropertyExpanderContextBasedProperties {
     /**
      * Sets the context based properties, executes the runnable, and guarantees cleanup.
      * This is the preferred way to use context properties in thread-pool environments.
+     * After the execution the previously bound properties are restored (or removed if there were none),
+     * so nested calls do not affect the outer context.
      *
      * @param properties the context based properties
      * @param runnable the code to execute with the properties set
      */
     public static void runWith(Properties properties, Runnable runnable) {
+        final Properties previous = get();
         set(properties);
         try {
             runnable.run();
         } finally {
-            unset();
+            if (previous == null) {
+                unset();
+            } else {
+                set(previous);
+            }
         }
     }
 }

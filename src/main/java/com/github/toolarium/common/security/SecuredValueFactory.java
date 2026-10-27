@@ -20,8 +20,9 @@ import com.github.toolarium.common.security.impl.SecuredSecretValue;
  * ISecuredValue<String> token = SecuredValueFactory.getInstance().create(apiToken);
  *
  * // off-heap secret — zeroed on close()
- * try (ISecuredValue<String> pw = SecuredValueFactory.getInstance().createSecret(passwordChars)) {
- *     // use pw ...
+ * try (ISecuredSecretValue pw = SecuredValueFactory.getInstance().createSecret(passwordChars)) {
+ *     SecretKeySpec key = pw.getValue().use(bytes -> new SecretKeySpec(bytes, "AES"));
+ *     // ...
  * }
  * }</pre>
  *

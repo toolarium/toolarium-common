@@ -1,5 +1,5 @@
 /*
- * Version.java
+ * SemanticVersionTest.java
  *
  * Copyright by toolarium, all rights reserved.
  */
@@ -7,10 +7,18 @@ package com.github.toolarium.common.version;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +41,11 @@ public class SemanticVersionTest extends AbstractVersionTest {
     private static final String T2 = "2";
     private static final String T3 = "3";
     private static final String V1_0_0 = "1.0.0";
+    private static final String V1_0_0_01 = "1.0.0-01";
+    private static final String V1_0_0_ALPHA = "1.0.0-alpha";
+    private static final String V2_0_0 = "2.0.0";
+    private static final String V1_2_0 = "1.2.0";
+    private static final String V1_2 = "1.2";
     private static final String V1_0_0_ALPHA_1 = "1.0.0-alpha.1";
     private static final String V1_0_0_ALPHA_BETA = "1.0.0-alpha.beta";
     private static final String V1_0_0_BETA = "1.0.0-beta";
@@ -43,6 +56,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
     private static final String SHA_0NSFGKJKJSDF = "sha.0nsfgkjkjsdf";
     private static final String BETA = "beta";
     private static final String ELEVEN = "11";
+    private static final String V1_2_3_BUILD_5 = "1.2.3+build.5";
 
     
     /**
@@ -175,7 +189,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
     public void isGreaterThan_test() {
         // 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0
     
-        assertTrue(new SemanticVersion(V1_0_0_ALPHA_1).isGreaterThan("1.0.0-alpha"));
+        assertTrue(new SemanticVersion(V1_0_0_ALPHA_1).isGreaterThan(V1_0_0_ALPHA));
         assertTrue(new SemanticVersion(V1_0_0_ALPHA_BETA).isGreaterThan(V1_0_0_ALPHA_1));
         assertTrue(new SemanticVersion(V1_0_0_BETA).isGreaterThan(V1_0_0_ALPHA_BETA));
         assertTrue(new SemanticVersion(V1_0_0_BETA_2).isGreaterThan(V1_0_0_BETA));
@@ -184,7 +198,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         assertTrue(new SemanticVersion(V1_0_0).isGreaterThan(V1_0_0_RC_1));
     
     
-        assertFalse(new SemanticVersion("1.0.0-alpha").isGreaterThan(V1_0_0_ALPHA_1));
+        assertFalse(new SemanticVersion(V1_0_0_ALPHA).isGreaterThan(V1_0_0_ALPHA_1));
         assertFalse(new SemanticVersion(V1_0_0_ALPHA_1).isGreaterThan(V1_0_0_ALPHA_BETA));
         assertFalse(new SemanticVersion(V1_0_0_ALPHA_BETA).isGreaterThan(V1_0_0_BETA));
         assertFalse(new SemanticVersion(V1_0_0_BETA).isGreaterThan(V1_0_0_BETA_2));
@@ -207,7 +221,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
     public void isLowerThan_test() {
         // 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0
     
-        assertFalse(new SemanticVersion(V1_0_0_ALPHA_1).isLowerThan("1.0.0-alpha"));
+        assertFalse(new SemanticVersion(V1_0_0_ALPHA_1).isLowerThan(V1_0_0_ALPHA));
         assertFalse(new SemanticVersion(V1_0_0_ALPHA_BETA).isLowerThan(V1_0_0_ALPHA_1));
         assertFalse(new SemanticVersion(V1_0_0_BETA).isLowerThan(V1_0_0_ALPHA_BETA));
         assertFalse(new SemanticVersion(V1_0_0_BETA_2).isLowerThan(V1_0_0_BETA));
@@ -215,7 +229,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         assertFalse(new SemanticVersion(V1_0_0_RC_1).isLowerThan(V1_0_0_BETA_11));
         assertFalse(new SemanticVersion(V1_0_0).isLowerThan(V1_0_0_RC_1));
     
-        assertTrue(new SemanticVersion("1.0.0-alpha").isLowerThan(V1_0_0_ALPHA_1));
+        assertTrue(new SemanticVersion(V1_0_0_ALPHA).isLowerThan(V1_0_0_ALPHA_1));
         assertTrue(new SemanticVersion(V1_0_0_ALPHA_1).isLowerThan(V1_0_0_ALPHA_BETA));
         assertTrue(new SemanticVersion(V1_0_0_ALPHA_BETA).isLowerThan(V1_0_0_BETA));
         assertTrue(new SemanticVersion(V1_0_0_BETA).isLowerThan(V1_0_0_BETA_2));
@@ -320,7 +334,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         SemanticVersion result = version.withSuffix("Beta.1");
     
         assertEquals("1.2.3-Beta.1+SHA123456789", result.toString());
-        assertEquals(Arrays.asList("Beta", "1"), result.getSuffixTokens());
+        assertEquals(Arrays.asList("Beta", T1), result.getSuffixTokens());
     }
     
 
@@ -333,7 +347,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         SemanticVersion result = version.withSuffix("Beta.1");
     
         assertEquals("1.2.3-Beta.1+SHA123456789", result.toString());
-        assertEquals(Arrays.asList("Beta", "1"), result.getSuffixTokens());
+        assertEquals(Arrays.asList("Beta", T1), result.getSuffixTokens());
     }
     
 
@@ -369,7 +383,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
     @Test
     public void nextMajor_test() {
         SemanticVersion version = new SemanticVersion("1.2.3-beta.4+sha123456789");
-        version.nextMajor().isEqualTo("2.0.0");
+        version.nextMajor().isEqualTo(V2_0_0);
     }
 
     
@@ -444,7 +458,7 @@ public class SemanticVersionTest extends AbstractVersionTest {
         // GIVEN
         SemanticVersion[] array = new SemanticVersion[] {new SemanticVersion(V1_2_3), new SemanticVersion("1.2.3-rc3"), new SemanticVersion("1.2.3-rc2"),
                                                          new SemanticVersion("1.2.3-rc1"), new SemanticVersion("1.2.2"), new SemanticVersion("1.2.2-rc2"),
-                                                         new SemanticVersion("1.2.2-rc1"), new SemanticVersion("1.2.0") };
+                                                         new SemanticVersion("1.2.2-rc1"), new SemanticVersion(V1_2_0) };
         int len = array.length;
         List<SemanticVersion> list = new ArrayList<SemanticVersion>(len);
         Collections.addAll(list, array);
@@ -464,9 +478,9 @@ public class SemanticVersionTest extends AbstractVersionTest {
      */
     @Test
     public void compareTo_without_path_or_minor() {
-        assertTrue(new SemanticVersion(V1_2_3,VersionType.LOOSE).isGreaterThan("1.2"));
+        assertTrue(new SemanticVersion(V1_2_3,VersionType.LOOSE).isGreaterThan(V1_2));
         assertTrue(new SemanticVersion("1.3",VersionType.LOOSE).isGreaterThan(V1_2_3));
-        assertTrue(new SemanticVersion(V1_2_3,VersionType.LOOSE).isGreaterThan("1"));
+        assertTrue(new SemanticVersion(V1_2_3,VersionType.LOOSE).isGreaterThan(T1));
         assertTrue(new SemanticVersion("2",VersionType.LOOSE).isGreaterThan(V1_2_3));
     }
 
@@ -647,8 +661,182 @@ public class SemanticVersionTest extends AbstractVersionTest {
 
     
     /**
+     * Test that compareTo is a consistent three-way comparison
+     */
+    @Test
+    public void compareTo_is_consistent() {
+        String[][] pairs = new String[][] {
+            {T1, V1_0_0}, {V1_2, V1_2_0}, {V1_0_0_ALPHA, "1.0.0-ALPHA"}, {V1_0_0_01, "1.0.0-1"},
+            {"1.0.0-1", "1.0.0-alpha"}, {V1_0_0_ALPHA, "1.0.0-alpha.1"}, {"1.0.0-beta.2", "1.0.0-beta.11"},
+            {"1.0.0-rc.1", V1_0_0}, {"1.0.0+a", "1.0.0+b"}, {"1.0.0-alpha+a", "1.0.0-alpha"}};
+        for (String[] pair : pairs) {
+            SemanticVersion v1 = new SemanticVersion(pair[0], VersionType.LOOSE);
+            SemanticVersion v2 = new SemanticVersion(pair[1], VersionType.LOOSE);
+            assertEquals(Integer.signum(v1.compareTo(v2)), -Integer.signum(v2.compareTo(v1)), pair[0] + " <> " + pair[1]);
+            assertEquals(v1.compareTo(v2) > 0, v1.isGreaterThan(v2));
+            assertEquals(v1.compareTo(v2) < 0, v1.isLowerThan(v2));
+            assertEquals(v1.compareTo(v2) == 0, v1.isEquivalentTo(v2));
+            assertEquals(v1.compareTo(v2) >= 0, v1.isGreaterThanOrEqualTo(v2));
+            assertEquals(v1.compareTo(v2) <= 0, v1.isLowerThanOrEqualTo(v2));
+            if (v1.equals(v2)) {
+                assertEquals(0, v1.compareTo(v2));
+                assertEquals(v1.hashCode(), v2.hashCode());
+            }
+        }
+
+        // missing parts are treated as 0
+        assertEquals(0, new SemanticVersion(T1, VersionType.LOOSE).compareTo(new SemanticVersion(V1_0_0)));
+        assertEquals(new SemanticVersion(T1, VersionType.LOOSE), new SemanticVersion(V1_0_0));
+        assertEquals(new SemanticVersion(T1, VersionType.LOOSE).hashCode(), new SemanticVersion(V1_0_0).hashCode());
+
+        // ASCII sort order, numeric identifiers compared numerically and lower than alphanumeric
+        assertTrue(new SemanticVersion("1.0.0-ALPHA").isLowerThan(V1_0_0_ALPHA));
+        assertTrue(new SemanticVersion(V1_0_0_ALPHA).isGreaterThan("1.0.0-ALPHA"));
+        assertTrue(new SemanticVersion("1.0.0-999").isLowerThan("1.0.0-a"));
+        assertTrue(new SemanticVersion("1.0.0-alpha.10").isGreaterThan("1.0.0-alpha.9"));
+        assertTrue(new SemanticVersion("1.0.0-alpha.99999999999").isGreaterThan("1.0.0-alpha.9999999999"));
+
+        // a leading zero in a numeric pre-release identifier is rejected by STRICT (semver), LOOSE accepts it and compares it numerically
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion(V1_0_0_01));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion(V1_0_0_01, VersionType.STRICT));
+        assertEquals(0, new SemanticVersion(V1_0_0_01, VersionType.LOOSE).compareTo(new SemanticVersion("1.0.0-1")));
+        assertEquals(new SemanticVersion(V1_0_0_01, VersionType.LOOSE), new SemanticVersion("1.0.0-1"));
+
+        // build is ignored for the precedence but not for equals
+        assertEquals(0, new SemanticVersion("1.0.0+a").compareTo(new SemanticVersion("1.0.0+b")));
+        assertFalse(new SemanticVersion("1.0.0+a").equals(new SemanticVersion("1.0.0+b")));
+    }
+
+
+    /**
+     * Test sorting a list (with a lot of equal elements) does not violate the comparator contract
+     */
+    @Test
+    public void compareTo_sort_contract() {
+        String[] versions = {T1, "1.0", V1_0_0, V1_0_0_ALPHA, "1.0.0-ALPHA", V1_0_0_01, "1.0.0-1", "1.0.0-alpha.1", "1.0.0-alpha.beta",
+                             "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0+b", V2_0_0, "0.9"};
+        List<SemanticVersion> list = new ArrayList<SemanticVersion>();
+        for (int i = 0; i < 10; i++) {
+            for (String v : versions) {
+                list.add(new SemanticVersion(v, VersionType.LOOSE));
+            }
+        }
+
+        for (int i = 0; i < 20; i++) {
+            Collections.shuffle(list);
+            Collections.sort(list);
+            for (int j = 1; j < list.size(); j++) {
+                assertTrue(list.get(j - 1).compareTo(list.get(j)) <= 0);
+            }
+        }
+
+        assertEquals("0.9", list.get(0).toString());
+        assertEquals(V2_0_0, list.get(list.size() - 1).toString());
+    }
+
+
+    /**
+     * Test isEquivalentTo keeps the version type
+     */
+    @Test
+    public void isEquivalentTo_keeps_the_version_type() {
+        SemanticVersion loose = new SemanticVersion("1.2+build", VersionType.LOOSE);
+        assertTrue(loose.isEquivalentTo(V1_2_0));
+        assertTrue(loose.isEquivalentTo("1.2.0+other"));
+        assertTrue(loose.isGreaterThanOrEqualTo(V1_2));
+        assertTrue(loose.isLowerThan("1.2.1+build"));
+        assertFalse(loose.isEqualTo(V1_2_0));
+        assertTrue(loose.isEqualTo("1.2.0+build"));
+
+        SemanticVersion npm = new SemanticVersion("1.2+build", VersionType.NPM);
+        assertTrue(npm.isEquivalentTo(V1_2_0));
+        assertTrue(npm.isEquivalentTo(V1_2));
+        assertTrue(npm.satisfies(V1_2));
+        assertTrue(npm.satisfies(">=1.2.0 <1.3.0"));
+    }
+
+
+    /**
+     * Test build containing a hyphen
+     */
+    @Test
+    public void build_with_hyphen() {
+        assertIsVersion(new SemanticVersion("1.0.0+21AF26D3----117B344092BD"), "1.0.0+21AF26D3----117B344092BD", 1, 0, 0, new String[0], "21AF26D3----117B344092BD");
+        assertIsVersion(new SemanticVersion("1.2.3+build-5"), "1.2.3+build-5", 1, 2, 3, new String[0], "build-5");
+        assertIsVersion(new SemanticVersion("1.0.0-alpha+001-x"), "1.0.0-alpha+001-x", 1, 0, 0, new String[] {"alpha"}, "001-x");
+        assertIsVersion(new SemanticVersion("1.0.0-x-y.1+b-c"), "1.0.0-x-y.1+b-c", 1, 0, 0, new String[] {"x-y", "1"}, "b-c");
+    }
+
+
+    /**
+     * Test the suffix tokens are unmodifiable
+     */
+    @Test
+    public void suffixTokens_are_unmodifiable() {
+        SemanticVersion version = new SemanticVersion("1.2.3-beta.4");
+        Assertions.assertThrows(UnsupportedOperationException.class, () -> version.getSuffixTokens().set(0, "alpha"));
+        Assertions.assertThrows(UnsupportedOperationException.class, () -> new SemanticVersion(V1_2_3).getSuffixTokens().add("alpha"));
+        assertEquals(Arrays.asList(BETA, "4"), version.getSuffixTokens());
+    }
+
+
+    /**
+     * Test serialization
+     *
+     * @throws IOException in case of error
+     * @throws ClassNotFoundException in case of error
+     */
+    @Test
+    public void serialization_round_trip() throws IOException, ClassNotFoundException {
+        for (String v : new String[] {V1_2_3, "1.2.3-beta.4+sha123", "1.0.0+21AF26D3----117B344092BD"}) {
+            SemanticVersion version = new SemanticVersion(v);
+            SemanticVersion copy = (SemanticVersion) roundTrip(version);
+            assertEquals(version, copy);
+            assertEquals(version.toString(), copy.toString());
+            assertEquals(version.getBuild(), copy.getBuild());
+            assertEquals(version.getSuffixTokens(), copy.getSuffixTokens());
+            assertEquals(version.getType(), copy.getType());
+        }
+
+        SemanticVersion npm = (SemanticVersion) roundTrip(new SemanticVersion("v1.2", VersionType.NPM));
+        assertEquals(VersionType.NPM, npm.getType());
+        assertTrue(npm.satisfies(V1_2));
+    }
+
+
+    /**
+     * Test a semantic version is never equal to a version
+     */
+    @Test
+    public void not_equal_to_version() {
+        assertFalse(new SemanticVersion(V1_2_3).equals(new Version(V1_2_3)));
+        assertFalse(new Version(V1_2_3).equals(new SemanticVersion(V1_2_3)));
+    }
+
+
+    /**
+     * Serialize and deserialize an object
+     *
+     * @param object the object
+     * @return the deserialized object
+     * @throws IOException in case of error
+     * @throws ClassNotFoundException in case of error
+     */
+    static Object roundTrip(Object object) throws IOException, ClassNotFoundException {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (ObjectOutputStream out = new ObjectOutputStream(bos)) {
+            out.writeObject(object);
+        }
+
+        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+            return in.readObject();
+        }
+    }
+
+
+    /**
      * Test
-     * 
+     *
      * @param version rge version
      * @param value the value
      * @param major the major number
@@ -676,8 +864,8 @@ public class SemanticVersionTest extends AbstractVersionTest {
     @Test
     public void testFilterDoesNotMutateInputList() {
         List<SemanticVersion> input = new ArrayList<>();
-        input.add(new SemanticVersion("1.0.0"));
-        input.add(new SemanticVersion("2.0.0"));
+        input.add(new SemanticVersion(V1_0_0));
+        input.add(new SemanticVersion(V2_0_0));
         input.add(new SemanticVersion("0.5.0"));
 
         List<SemanticVersion> copy = new ArrayList<>(input);
@@ -695,12 +883,12 @@ public class SemanticVersionTest extends AbstractVersionTest {
      */
     @Test
     public void testIsGreaterThanEqualMajor() {
-        SemanticVersion v1 = new SemanticVersion("1.0.0");
-        SemanticVersion v2 = new SemanticVersion("1.0.0");
+        SemanticVersion v1 = new SemanticVersion(V1_0_0);
+        SemanticVersion v2 = new SemanticVersion(V1_0_0);
         assertFalse(v1.isGreaterThan(v2));
         assertFalse(v2.isGreaterThan(v1));
 
-        SemanticVersion v3 = new SemanticVersion("2.0.0");
+        SemanticVersion v3 = new SemanticVersion(V2_0_0);
         assertTrue(v3.isGreaterThan(v1));
         assertFalse(v1.isGreaterThan(v3));
     }
@@ -937,9 +1125,9 @@ public class SemanticVersionTest extends AbstractVersionTest {
      */
     private List<SemanticVersion> createCliVersionList() {
         return SemanticVersion.convert(Arrays.asList(
-                "2.2.1", "2.2.0", "2.1.2", "2.1.1", "2.1.0", "2.0.2", "2.0.1", "2.0.0",
-                "1.3.4", "1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0",
-                "1.1.4", "1.1.3", "1.1.2", "1.1.1", "1.1.0", "1.0.3", "1.0.2", "1.0.1", "1.0.0",
+                "2.2.1", "2.2.0", "2.1.2", "2.1.1", "2.1.0", "2.0.2", "2.0.1", V2_0_0,
+                "1.3.4", "1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.4", V1_2_3, "1.2.2", "1.2.1", V1_2_0,
+                "1.1.4", "1.1.3", "1.1.2", "1.1.1", "1.1.0", "1.0.3", "1.0.2", "1.0.1", V1_0_0,
                 "0.7.3", "0.7.2", "0.7.1", "0.7.0", "0.6.3", "0.6.2", "0.6.1", "0.6.0",
                 "0.5.33", "0.5.2", "0.5.1", "0.5.0", "0.4.11", "0.4.5", "0.4.2", "0.4.1", "0.4.0",
                 "0.1.5", "0.1.4", "0.1.3", "0.1.2", "0.1.1", "0.1.0", "0.0.6", "0.0.5", "0.0.4", "0.0.3", "0.0.2"),
@@ -981,5 +1169,276 @@ public class SemanticVersionTest extends AbstractVersionTest {
                                     int prevMinor, int prevPatch, String expected) {
         assertEquals("[" + expected + "]",
                 SemanticVersion.filter(versionList, majorMinorMax, majorThreshold, minorThreshold, patchThreshold, prevMinor, prevPatch).toString());
+    }
+
+
+    /**
+     * A long whitespace run in a range expression is handled fast
+     */
+    @Test
+    public void testSatisfiesLongWhitespace() {
+        final SemanticVersion version = new SemanticVersion(V1_2_3);
+        final String spaces = " ".repeat(200_000);
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            assertTrue(version.satisfies(">=1.0.0" + spaces + "||" + spaces + "<0.5.0"));
+            assertFalse(version.satisfies("<1.0.0" + spaces + "<0.5.0"));
+        });
+    }
+
+
+    /**
+     * NPM wildcard versions like 1.x are supported
+     */
+    @Test
+    public void testNpmWildcardVersion() {
+        assertEquals("1.x", new SemanticVersion("1.x", VersionType.NPM).toString());
+        assertEquals("1.2.*", new SemanticVersion("1.2.*", VersionType.NPM).toString());
+        SemanticVersion version = new SemanticVersion("1.5.0", VersionType.NPM);
+        assertTrue(version.satisfies(">=1.x"));
+        assertFalse(version.satisfies(">=2.x"));
+        assertTrue(version.satisfies("~1.x"));
+        assertFalse(new SemanticVersion("2.0.0", VersionType.NPM).satisfies("~1.x"));
+    }
+
+
+    /**
+     * Malformed npm ranges throw an IllegalArgumentException
+     */
+    @Test
+    public void testMalformedNpmRange() {
+        SemanticVersion version = new SemanticVersion("1.5.0", VersionType.NPM);
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies("~-"));
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies("^-"));
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies("1.0.0 - ."));
+    }
+
+
+    /**
+     * Whitespace between an npm operator and its version is ignored
+     */
+    @Test
+    public void testSatisfiesWithWhitespaceAfterOperator() {
+        final SemanticVersion version = new SemanticVersion(V1_2_3, VersionType.NPM);
+        assertTrue(version.satisfies(">= 1.0.0"));
+        assertTrue(version.satisfies(">=  1.0.0 <  2.0.0"));
+        assertFalse(version.satisfies("<= 1.0.0"));
+        assertFalse(version.satisfies("> 1.2.3"));
+        assertTrue(version.satisfies("~ 1.2.0"));
+        assertTrue(version.satisfies("^ 1.0.0"));
+    }
+
+
+    /**
+     * Hyphen, tilde and caret ranges support a wildcard upper bound and a v prefix like npm
+     */
+    @Test
+    public void testNpmRangeWithWildcardAndPrefix() {
+        final String hyphenRange = "1.0.0 - 2.x";
+        final SemanticVersion version = new SemanticVersion(V1_2_3, VersionType.NPM);
+        assertTrue(version.satisfies(hyphenRange));
+        assertFalse(new SemanticVersion("3.0.0", VersionType.NPM).satisfies(hyphenRange));
+        assertTrue(version.satisfies("1.0.0 - x"));
+        assertTrue(version.satisfies("1.0.0 - *"));
+        assertTrue(version.satisfies("v1.0.0 - v2"));
+        assertTrue(version.satisfies("~v1.2.3"));
+        assertFalse(version.satisfies("~v1.2.4"));
+        assertTrue(version.satisfies("^v1.2.3"));
+        assertTrue(version.satisfies("~x"));
+        assertTrue(version.satisfies("^X"));
+
+        final String caretMinorWildcard = "^0.x";
+        final String caretPatchWildcard = "^0.0.x";
+        assertTrue(new SemanticVersion("0.5.0", VersionType.NPM).satisfies(caretMinorWildcard));
+        assertFalse(new SemanticVersion(V1_0_0, VersionType.NPM).satisfies(caretMinorWildcard));
+        assertTrue(new SemanticVersion("0.0.5", VersionType.NPM).satisfies(caretPatchWildcard));
+        assertFalse(new SemanticVersion("0.1.0", VersionType.NPM).satisfies(caretPatchWildcard));
+    }
+
+
+    /**
+     * The pre-release suffix and the build are validated according to semantic versioning 2.0
+     */
+    @Test
+    public void testInvalidSuffixAndBuild() {
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3-"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3-a..b"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3-a."));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3-a_b"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3+a+b"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3-a+b+c"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3+a..b"));
+
+        final SemanticVersion version = new SemanticVersion("1.2.3-beta.1+b5");
+        assertEquals("1.2.3+b5", version.withSuffix(null).toString());
+        assertThrows(IllegalArgumentException.class, () -> version.withSuffix("a..b"));
+    }
+
+
+    /**
+     * Only the ASCII digits 0 to 9 are numbers
+     */
+    @Test
+    public void testNonAsciiDigits() {
+        final String arabicOne = String.valueOf((char) 0x0661);
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion(arabicOne + ".2.3"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1." + arabicOne + ".3"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2." + arabicOne));
+    }
+
+
+    /**
+     * Like npm the build is ignored in a range: an exact version and all comparators match a version with build
+     */
+    @Test
+    public void testSatisfiesIgnoresBuild() {
+        final SemanticVersion version = new SemanticVersion(V1_2_3_BUILD_5, VersionType.NPM);
+        assertTrue(version.satisfies(V1_2_3));
+        assertTrue(version.satisfies("=1.2.3"));
+        assertTrue(version.satisfies("=1.2.3+other"));
+        assertTrue(version.satisfies(">=1.2.3"));
+        assertTrue(version.satisfies("<=1.2.3"));
+        assertFalse(version.satisfies(">1.2.3"));
+        assertFalse(version.satisfies("<1.2.3"));
+        assertFalse(version.satisfies("1.2.4"));
+        assertTrue(new SemanticVersion(V1_2_3, VersionType.NPM).satisfies(V1_2_3_BUILD_5));
+    }
+
+
+    /**
+     * A strict version has exactly three numeric parts, additional parts are not silently ignored
+     */
+    @Test
+    public void testStrictRejectsAdditionalParts() {
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3.4"));
+        assertEquals("Invalid version (too many version parts):1.2.3.4", thrown.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3.foo"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3.4-beta+b1"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3."));
+        assertEquals("1.2.3-beta.1.2+b.1.2", new SemanticVersion("1.2.3-beta.1.2+b.1.2").toString());
+        assertEquals("b.4", new SemanticVersion("1.2.3+b.4").getBuild());
+    }
+
+
+    /**
+     * A strict version rejects leading zeros in the numbers and in numeric pre-release identifiers, the other types accept them
+     */
+    @Test
+    public void testStrictRejectsLeadingZeros() {
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("01.2.3"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.02.3"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.03"));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion(V1_0_0_01));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.0.0-alpha.01"));
+        assertEquals("0.0.0-0.0a.01a+01", new SemanticVersion("0.0.0-0.0a.01a+01").toString());
+        assertEquals(1, new SemanticVersion("01.02.03", VersionType.LOOSE).getMajor().intValue());
+        assertEquals(2, new SemanticVersion("1.02.3", VersionType.NPM).getMinor().intValue());
+    }
+
+
+    /**
+     * A npm version has at most three numeric parts and no empty part
+     */
+    @Test
+    public void testNpmRejectsAdditionalAndEmptyParts() {
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3.4", VersionType.NPM));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.3.", VersionType.NPM));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1.2.", VersionType.NPM));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion("1..2", VersionType.NPM));
+        assertEquals(V1_2, new SemanticVersion(V1_2, VersionType.NPM).toString());
+        assertEquals("1.2.3-beta+b.1", new SemanticVersion("1.2.3-beta+b.1", VersionType.NPM).toString());
+    }
+
+
+    /**
+     * An operator without version is a malformed range
+     */
+    @Test
+    public void testSatisfiesOperatorWithoutVersion() {
+        final SemanticVersion version = new SemanticVersion(V1_2_3, VersionType.NPM);
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies("<"));
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies(">="));
+        assertThrows(IllegalArgumentException.class, () -> new SemanticVersion(V1_2_3).satisfies("="));
+        assertThrows(IllegalArgumentException.class, () -> version.satisfies(">=foo"));
+    }
+
+
+    /**
+     * The range is evaluated with the npm rules whatever the version type: a partial version in the range is a wildcard
+     */
+    @Test
+    public void testSatisfiesPartialRangeIndependentOfVersionType() {
+        final String[] ranges = {V1_2, "=1.2", "<=1.2", T1, ">1", "<1.2", ">=1.2", "~1.2", "^1"};
+        for (String v : new String[] {"1.2.5", V1_2_0, V2_0_0, "1.1.9"}) {
+            final SemanticVersion npm = new SemanticVersion(v, VersionType.NPM);
+            for (String range : ranges) {
+                assertEquals(npm.satisfies(range), new SemanticVersion(v).satisfies(range), v + " ~ " + range);
+                assertEquals(npm.satisfies(range), new SemanticVersion(v, VersionType.LOOSE).satisfies(range), v + " ~ " + range);
+            }
+        }
+
+        final SemanticVersion strict = new SemanticVersion("1.2.5");
+        assertTrue(strict.satisfies(V1_2));
+        assertTrue(strict.satisfies("=1.2"));
+        assertTrue(strict.satisfies("<=1.2"));
+        assertTrue(strict.satisfies(T1));
+        assertFalse(strict.satisfies(">1"));
+        assertFalse(strict.satisfies("<1.2"));
+        assertTrue(new SemanticVersion(V2_0_0).satisfies(">1"));
+    }
+
+
+    /**
+     * Like npm a pre-release does not satisfy any version, only a range with a pre-release of the same major, minor and patch
+     */
+    @Test
+    public void testPreReleaseDoesNotSatisfyAnyVersion() {
+        final SemanticVersion preRelease = new SemanticVersion(V1_0_0_BETA, VersionType.NPM);
+        assertFalse(preRelease.satisfies("*"));
+        assertFalse(preRelease.satisfies("x"));
+        assertFalse(preRelease.satisfies(""));
+        assertFalse(preRelease.satisfies(">=0.0.0"));
+        assertFalse(preRelease.satisfies("1.x"));
+        assertTrue(preRelease.satisfies(">=1.0.0-alpha"));
+        assertTrue(preRelease.satisfies("* || >=1.0.0-alpha"));
+        assertTrue(new SemanticVersion(V1_0_0, VersionType.NPM).satisfies("*"));
+    }
+
+
+    /**
+     * The next minor and patch version of a partial version is a full version
+     */
+    @Test
+    public void testNextVersionOfPartialVersion() {
+        assertEquals("1.1.0", new SemanticVersion(T1, VersionType.NPM).nextMinor().toString());
+        assertEquals("1.0.1", new SemanticVersion(T1, VersionType.NPM).nextPatch().toString());
+        assertEquals("1.2.1", new SemanticVersion(V1_2, VersionType.NPM).nextPatch().toString());
+        assertEquals("1.3.0", new SemanticVersion(V1_2, VersionType.NPM).nextMinor().toString());
+        assertEquals("1.3.0", new SemanticVersion("1.2.3-beta.4+sha123").nextMinor().toString());
+        assertEquals("1.2.4", new SemanticVersion("1.2.3-beta.4+sha123").nextPatch().toString());
+    }
+
+
+    /**
+     * With a major threshold of 0 no version is kept: filter and invert filter are complementary
+     */
+    @Test
+    public void testFilterMajorThresholdZero() {
+        List<SemanticVersion> versionList = new ArrayList<SemanticVersion>();
+        for (String v : new String[] {V1_2_3, V1_2_0, "1.1.0", V2_0_0, "2.0.1"}) {
+            versionList.add(new SemanticVersion(v));
+        }
+
+        assertEquals("[]", SemanticVersion.filter(versionList, 0, 0, 1, 1).toString());
+        assertEquals("[2.0.1, 2.0.0, 1.2.3, 1.2.0, 1.1.0]", SemanticVersion.invertFilter(versionList, 0, 1, 1).toString());
+        for (int majorThreshold = 0; majorThreshold < 3; majorThreshold++) {
+            for (int threshold = 0; threshold < 3; threshold++) {
+                List<SemanticVersion> filtered = SemanticVersion.filter(versionList, 0, majorThreshold, threshold, threshold);
+                List<SemanticVersion> inverted = SemanticVersion.invertFilter(versionList, majorThreshold, threshold, threshold);
+                assertEquals(versionList.size(), filtered.size() + inverted.size(), majorThreshold + "/" + threshold);
+                for (SemanticVersion version : versionList) {
+                    assertTrue(filtered.contains(version) != inverted.contains(version), version + " " + majorThreshold + "/" + threshold);
+                }
+            }
+        }
     }
 }

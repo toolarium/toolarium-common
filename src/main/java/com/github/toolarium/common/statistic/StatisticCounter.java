@@ -8,8 +8,9 @@ package com.github.toolarium.common.statistic;
 import com.github.toolarium.common.util.TextUtil;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.Objects;
+import java.util.Arrays;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -68,8 +69,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
         this.max = max;
         this.sum = sum;
         this.squareSum = squareSum;
-        this.mean = sum / counter;
-        this.m2 = Math.max(0d, squareSum - sum * sum / counter);
+        rebuildMeanAndM2();
     }
 
 
@@ -103,11 +103,16 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
 
 
     /**
-     * Adds a double value
+     * Adds a double value. A value which is not finite (NaN or infinite) is ignored, it would make the statistic
+     * values invalid.
      *
      * @param num the number to add
      */
     public void add(double num) {
+        if (!Double.isFinite(num)) {
+            return;
+        }
+
         lock.writeLock().lock();
         try {
             counter++;
@@ -360,12 +365,7 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
      */
     @Override
     public int hashCode() {
-        lock.readLock().lock();
-        try {
-            return Objects.hash(counter, getMaxValue(), getMinValue(), squareSum, sum);
-        } finally {
-            lock.readLock().unlock();
-        }
+        return Arrays.hashCode(equalitySnapshot());
     }
 
 
@@ -388,17 +388,29 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
 
         StatisticCounter other = (StatisticCounter) obj;
 
-        // read locks can be held by multiple threads simultaneously — no ordering trick needed
+        // never hold both locks at the same time (a queued writer could otherwise cause a deadlock between
+        // a.equals(b) and b.equals(a)): take a snapshot of each side under its own lock, one after the other
+        return Arrays.equals(equalitySnapshot(), other.equalitySnapshot());
+    }
+
+
+    /**
+     * Takes a consistent snapshot of the attributes relevant for {@link #equals(Object)} and {@link #hashCode()}
+     * under the read lock.
+     *
+     * @return the snapshot: counter, max, min, square sum and sum (doubles as raw long bits)
+     */
+    private long[] equalitySnapshot() {
         lock.readLock().lock();
-        other.lock.readLock().lock();
         try {
-            return counter == other.counter
-                    && Double.doubleToLongBits(getMaxValue()) == Double.doubleToLongBits(other.getMaxValue())
-                    && Double.doubleToLongBits(getMinValue()) == Double.doubleToLongBits(other.getMinValue())
-                    && Double.doubleToLongBits(squareSum) == Double.doubleToLongBits(other.squareSum)
-                    && Double.doubleToLongBits(sum) == Double.doubleToLongBits(other.sum);
+            long[] snapshot = new long[5];
+            snapshot[0] = counter;
+            snapshot[1] = Double.doubleToLongBits(getMaxValue());
+            snapshot[2] = Double.doubleToLongBits(getMinValue());
+            snapshot[3] = Double.doubleToLongBits(squareSum);
+            snapshot[4] = Double.doubleToLongBits(sum);
+            return snapshot;
         } finally {
-            other.lock.readLock().unlock();
             lock.readLock().unlock();
         }
     }
@@ -445,35 +457,80 @@ public class StatisticCounter implements IStatisticCounter<StatisticCounter>, Cl
 
 
     /**
-     * Restores the transient lock after deserialization.
+     * Writes the state under the read lock, so that a consistent snapshot is serialized.
+     *
+     * @param out the object output stream
+     * @throws IOException if an I/O error occurs
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        lock.readLock().lock();
+        try {
+            out.defaultWriteObject();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+
+    /**
+     * Restores the state and the transient lock after deserialization. Data serialized with version 1.1.0 or older
+     * contains no {@code mean} and {@code m2} values, they are rebuilt from the sum and the square sum.
      *
      * @param in the object input stream
      * @throws IOException if an I/O error occurs
      * @throws ClassNotFoundException if the class cannot be found
      */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject();
+        ObjectInputStream.GetField fields = in.readFields();
+        counter = fields.get("counter", 0L);
+        min = fields.get("min", Double.POSITIVE_INFINITY);
+        max = fields.get("max", Double.NEGATIVE_INFINITY);
+        sum = fields.get("sum", 0d);
+        squareSum = fields.get("squareSum", 0d);
+        mean = fields.get("mean", 0d);
+        m2 = fields.get("m2", 0d);
         lock = new ReentrantReadWriteLock();
+
+        if (fields.defaulted("mean") || fields.defaulted("m2")) {
+            rebuildMeanAndM2();
+        }
     }
 
 
     /**
+     * Rebuilds the mean and the sum of squared deviations ({@code m2}) from the counter, the sum and the square sum.
+     * It is used for values which are only known as sums (e.g. data serialized with version 1.1.0 or older); the
+     * deviation is less precise than the incrementally calculated one in case of large values with a small deviation.
+     */
+    void rebuildMeanAndM2() {
+        if (counter <= 0) {
+            mean = 0.0;
+            m2 = 0.0;
+            return;
+        }
+
+        mean = sum / counter;
+        m2 = Math.max(0d, squareSum - sum * sum / counter);
+    }
+
+
+    /**
+     * Creates a copy with the same runtime class (also of a subclass) and its own lock. The fields of a subclass are
+     * copied shallow, a subclass with mutable state has to override this method to copy it.
+     *
      * @see java.lang.Object#clone()
      */
     @Override
     public StatisticCounter clone() {
         lock.readLock().lock();
         try {
-            // create a fresh instance to avoid sharing the lock with the original
-            StatisticCounter inst = new StatisticCounter();
-            inst.counter = counter;
-            inst.min = min;
-            inst.max = max;
-            inst.sum = sum;
-            inst.squareSum = squareSum;
-            inst.mean = mean;
-            inst.m2 = m2;
+            // the copy keeps the runtime class of a subclass and gets its own lock
+            StatisticCounter inst = (StatisticCounter) super.clone();
+            inst.lock = new ReentrantReadWriteLock();
             return inst;
+        } catch (CloneNotSupportedException e) {
+            // can not happen, the class implements Cloneable
+            throw new IllegalStateException(e);
         } finally {
             lock.readLock().unlock();
         }

@@ -1,21 +1,22 @@
 /*
- * TimeDifferenceUtil.java
+ * TimeDifferenceFormatter.java
  *
  * Copyright by toolarium, all rights reserved.
  */
 package com.github.toolarium.common.formatter;
 
 /**
- * 
+ * Formats a time difference in milliseconds into a human readable string, e.g. <code>1h 2min 3s</code>.
+ *
  * @author patrick
  */
 public class TimeDifferenceFormatter extends AbstractDifferenceFormatter {
-    private boolean shortFormat;
-    private String msText;
-    private String secText;
-    private String minText;
-    private String hourText;
-    private String dayText;
+    private final boolean shortFormat;
+    private final String msText;
+    private final String secText;
+    private final String minText;
+    private final String hourText;
+    private final String dayText;
     
     
     /**
@@ -72,12 +73,15 @@ public class TimeDifferenceFormatter extends AbstractDifferenceFormatter {
         boolean isNagativeValue = false;
         long diffTime = time;
         if (diffTime < 0) {
-            diffTime = -1 * diffTime;
+            if (diffTime == Long.MIN_VALUE) {
+                diffTime = Long.MAX_VALUE; // -Long.MIN_VALUE can not be represented
+            } else {
+                diffTime = -1 * diffTime;
+            }
             isNagativeValue = true;
         }
 
         String result = "";
-        long min = 1;
         String endStr = msText;
 
         if (diffTime < 1000 && shortFormat) {
@@ -88,31 +92,31 @@ public class TimeDifferenceFormatter extends AbstractDifferenceFormatter {
         if (diffTime >= 1000) {
             long rest = (diffTime % 1000);
             if (shortFormat) {
-                if (rest > 500) { 
-                    diffTime++;
+                if (rest >= 500 && diffTime <= Long.MAX_VALUE - 1000) {
+                    diffTime += 1000 - rest; // round to the next second
                 }
-            } else if (rest > min) {
+            } else if (rest > 0) {
                 result = formatNumber(rest, msText, spaceAfterValue());
             }
 
             diffTime /= 1000;
             endStr = secText;
 
-            if (diffTime > 60) {
+            if (diffTime >= 60) {
                 rest = (diffTime % 60);
                 result = addResult(rest, secText, result);
 
                 diffTime /= 60;
                 endStr = minText;
 
-                if (diffTime > 60) {
+                if (diffTime >= 60) {
                     rest = (diffTime % 60);
                     result = addResult(rest, minText, result);
 
                     diffTime /= 60;
                     endStr = hourText;
 
-                    if (diffTime > 24) {
+                    if (diffTime >= 24) {
                         rest = (diffTime % 24);
                         result = addResult(rest, hourText, result);
 

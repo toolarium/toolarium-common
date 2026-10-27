@@ -1,5 +1,5 @@
 /*
- * ValueDifferenceImpl.java
+ * ValueDifference.java
  *
  * Copyright by toolarium, all rights reserved.
  */
@@ -11,7 +11,8 @@ import java.util.Objects;
 
 /**
  * Implements the {@link IValueDifference}.
- * 
+ *
+ * @param <V> the value type
  * @author patrick
  */
 public class ValueDifference<V> implements IValueDifference<V> {
@@ -19,7 +20,7 @@ public class ValueDifference<V> implements IValueDifference<V> {
     private final V right;
 
     /**
-     * Constructor for ValueDifferenceImpl
+     * Constructor for ValueDifference
      * 
      * @param left the left
      * @param right the right
@@ -30,12 +31,18 @@ public class ValueDifference<V> implements IValueDifference<V> {
     }
 
 
+    /**
+     * @see com.github.toolarium.common.compare.map.IValueDifference#leftValue()
+     */
     @Override
     public V leftValue() {
         return left;
     }
 
     
+    /**
+     * @see com.github.toolarium.common.compare.map.IValueDifference#rightValue()
+     */
     @Override
     public V rightValue() {
         return right;

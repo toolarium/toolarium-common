@@ -14,7 +14,9 @@ import java.util.SortedMap;
 
 /**
  * Implements the {@link IMapDifference}.
- * 
+ *
+ * @param <K> the key type
+ * @param <V> the value type
  * @author patrick
  */
 public class MapDifference<K, V> implements IMapDifference<K, V> {

@@ -19,6 +19,7 @@ import java.lang.reflect.Method;
 public final class ReflectionUtil {
     private volatile boolean defaultDisabledAccessWarnings;
     private volatile boolean disabledAccessWarnings;
+    private volatile boolean disableAccessWarningsAttempted;
 
     /**
      * Private class, the only instance of the singelton which will be created by accessing the holder class.
@@ -57,7 +58,7 @@ public final class ReflectionUtil {
      * Check if the given class exists
      * 
      * @param className the name of the class to check
-     * @return true if the class exists; otherwise false
+     * @return true if the class exists; otherwise false, also if the class can not be linked (e.g. compiled for a newer java version)
      * @throws IllegalArgumentException In case of an invalid class name
      */
     public boolean isClassAvailable(String className) throws IllegalArgumentException {
@@ -68,9 +69,10 @@ public final class ReflectionUtil {
         try {
             disableAccessWarnings();
             
-            Class.forName(className, false, ClassInstanceUtil.class.getClassLoader());
+            loadClass(className.trim(), false);
             return true;
-        } catch (NoClassDefFoundError | Exception e) {
+        } catch (LinkageError | Exception e) {
+            // e.g. a class compiled for a newer java version (UnsupportedClassVersionError) is not available
             return false;
         }
     }
@@ -83,18 +85,66 @@ public final class ReflectionUtil {
      * @param className the name of the class
      * @return the loaded class
      * @throws IllegalArgumentException In case of an invalid class name
-     * @throws ClassNotFoundException in case of error
+     * @throws ClassNotFoundException in case of error, also if the class can not be linked or its static initializer
+     *         fails (the {@link LinkageError} is kept as cause)
      */
     public <T> Class<T> getClassObject(String className) throws IllegalArgumentException, ClassNotFoundException {
         if (className == null || className.isEmpty() || className.trim().isEmpty()) { // TODO: isBlank()
             throw new IllegalArgumentException("Invalid class name!");
         }
-        
+
         disableAccessWarnings();
-        
-        @SuppressWarnings("unchecked")
-        Class<T> resultCalss = (Class<T>)Class.forName(className.trim());
-        return resultCalss;
+
+        try {
+            @SuppressWarnings("unchecked")
+            Class<T> resultCalss = (Class<T>)loadClass(className.trim(), true);
+            return resultCalss;
+        } catch (LinkageError e) {
+            throw new ClassNotFoundException("Could not load class " + className.trim() + ": " + e, e);
+        }
+    }
+
+
+    /**
+     * Load a class without initializing it, its static initializers are not executed. It can be used if a class
+     * is only inspected.
+     *
+     * @param className the name of the class
+     * @return the loaded class or null if the class name is empty, the class could not be found or not be linked
+     */
+    Class<?> getClassObjectWithoutInitialization(String className) {
+        if (className == null || className.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            disableAccessWarnings();
+            return loadClass(className.trim(), false);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
+    }
+
+
+    /**
+     * Load a class: first by the context class loader of the current thread, then by the class loader of this library.
+     *
+     * @param className the name of the class
+     * @param initialize true to initialize the class (execute the static initializers)
+     * @return the loaded class
+     * @throws ClassNotFoundException in case the class could not be found
+     */
+    private Class<?> loadClass(String className, boolean initialize) throws ClassNotFoundException {
+        ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+        if (contextClassLoader != null) {
+            try {
+                return Class.forName(className, initialize, contextClassLoader);
+            } catch (ClassNotFoundException e) {
+                // try the class loader of this library
+            }
+        }
+
+        return Class.forName(className, initialize, ReflectionUtil.class.getClassLoader());
     }
 
     
@@ -125,7 +175,14 @@ public final class ReflectionUtil {
             constructor.setAccessible(true);
             return (T) constructor.newInstance();
         } catch (InvocationTargetException | NoSuchMethodException e) {
-            InstantiationException ex = new InstantiationException(e.getMessage());
+            // keep the real error of the constructor as cause
+            Throwable cause = e;
+            if (e instanceof InvocationTargetException && e.getCause() != null) {
+                cause = e.getCause();
+            }
+
+            InstantiationException ex = new InstantiationException(cause.toString());
+            ex.initCause(cause);
             ex.setStackTrace(e.getStackTrace());
             throw ex;
         }
@@ -189,10 +246,12 @@ public final class ReflectionUtil {
      * Disable access warnings
      */
     public void disableAccessWarnings() {
-        if (defaultDisabledAccessWarnings == disabledAccessWarnings) {
+        if (defaultDisabledAccessWarnings == disabledAccessWarnings || disableAccessWarningsAttempted) {
             return;
         }
-        
+
+        // try only once, e.g. on Java 17+ it is no longer supported and would fail on every call
+        disableAccessWarningsAttempted = true;
         try {
             Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
             Field field = unsafeClass.getDeclaredField("theUnsafe");

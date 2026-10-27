@@ -5,12 +5,12 @@
  */
 package com.github.toolarium.common.util;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 
 /**
  * Simple enum utilities.
+ *
+ * <p>The enum constants are not cached by this class: a cache would pin the class loader of this library
+ * from an enum type which may outlive it (e.g. a JDK enum after a redeploy).</p>
  *
  * @author patrick
  */
@@ -24,9 +24,6 @@ public final class EnumUtil {
     private static final class HOLDER {
         static final EnumUtil INSTANCE = new EnumUtil();
     }
-
-    
-    private final ConcurrentHashMap<Class<?>, Map<String, ?>> enumCache = new ConcurrentHashMap<>();
 
 
     /**
@@ -49,31 +46,34 @@ public final class EnumUtil {
 
     /**
      * Returns the enum constant of the specified enum type with the
-     * specified name.  The name must match exactly an identifier used
-     * to declare an enum constant in this type.  (Extraneous whitespace
-     * characters are not permitted.)
+     * specified name. The name is trimmed and compared with the identifiers used to declare the enum constants
+     * in this type: an exact match is preferred, otherwise the name is compared case insensitive. In case several
+     * constants differ only in case, the first declared constant is returned by the case insensitive comparison.
      *
      * @param <T> the type
      * @param enumType the <tt>Class</tt> object of the enum type from which
      *        to return a constant
      * @param name the name of the constant to return
      * @return the enum constant of the specified enum type with the
-     *         specified name
+     *         specified name or null if the name is null, empty or unknown
      */
-    @SuppressWarnings("unchecked")
     public <T extends Enum<T>> T valueOf(Class<T> enumType, String name) {
         if (name == null || name.trim().length() == 0) {
             return null;
         }
 
-        Map<String, T> lookup = (Map<String, T>) enumCache.computeIfAbsent(enumType, k -> {
-            Map<String, T> map = new ConcurrentHashMap<>();
-            for (T constant : enumType.getEnumConstants()) {
-                map.put(constant.name().toUpperCase(), constant);
+        String trimmedName = name.trim();
+        T caseInsensitiveMatch = null;
+        for (T constant : enumType.getEnumConstants()) {
+            if (constant.name().equals(trimmedName)) {
+                return constant;
             }
-            return map;
-        });
 
-        return lookup.get(name.trim().toUpperCase());
+            if (caseInsensitiveMatch == null && constant.name().equalsIgnoreCase(trimmedName)) {
+                caseInsensitiveMatch = constant;
+            }
+        }
+
+        return caseInsensitiveMatch;
     }
 }
